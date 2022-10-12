@@ -1,0 +1,3335 @@
+import pandas as pd
+import random
+import numpy as np
+import math
+import warnings 
+import copy
+from sklearn import metrics
+from sklearn.model_selection import train_test_split 
+from sklearn.model_selection import RepeatedStratifiedKFold
+ # explicitly require this experimental feature
+from sklearn.experimental import enable_iterative_imputer  # noqa
+from sklearn.impute import IterativeImputer
+from sklearn.impute import SimpleImputer
+from sklearn.impute import KNNImputer
+from sklearn.impute import MissingIndicator
+from sklearn.linear_model import BayesianRidge
+from sklearn.tree import ExtraTreeClassifier  
+from sklearn.ensemble  import ExtraTreesRegressor
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.tree import DecisionTreeClassifier
+from itertools import combinations
+from sko.SA import SA
+from sklearn.metrics import log_loss
+from sklearn.preprocessing import  OneHotEncoder
+from sklearn.neural_network import MLPClassifier
+import datetime
+import time
+from sklearn.inspection import permutation_importance
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import norm
+from sklearn.utils import shuffle
+from sklearn.metrics import r2_score
+from sklearn.metrics import accuracy_score
+class Fib_test:
+    df_miss_list
+    def __init__ (self,df_miss_list):
+        self.df_miss_list = df_miss_list#实例属性
+    def plot_proba(self):
+        plot_data=[]
+        improve_data=[]
+        for each_group in df_miss_list:
+            for each_data in each_group:
+                X0 = copy.(deep=True)
+                miss_indicator = MissingIndicator()
+                Xt=miss_indicator.fit_transform(X0)
+                X0.iloc[0:X0.shape[0],:] = k_imp.fit_transform(X0)
+                X0=reduction_data_type(df_miss_list[0][0],X0)
+                X=X0.loc[:,X0.columns!=target]
+                y=X0.loc[:,X0.columns==target]
+                dt.fit(X,y)
+                X_test=df.loc[:,df.columns!=target]
+                y_test=df.loc[:,df.columns==target]
+                p1 = dt.score(X_test,y_test)
+                Fi = permutation_importance(dt, X, y, n_repeats=10,random_state=0).importances_mean
+                res=rbf(X0,target,Fi,Xt)
+                dt.fit(X,y,sample_weight=res)
+                p2=dt.score(X_test,y_test)
+                dt.fit(df.loc[:,df.columns!=target],df.loc[:,df.columns==target])
+                _predict_res = dt.predict(X0.loc[:,X0.columns!=target]) #用df -> dimp
+                right_ce=[]
+                wrong_ce=[]
+                for k in range(0,len(_predict_res)):
+                    if(_predict_res[k]==X0.loc[k,target]):
+                        right_ce.append(res[k])
+                    else:
+                        wrong_ce.append(res[k])
+                plot(right_ce+wrong_ce)
+                plot_data.append([right_ce,wrong_ce])
+                improve_data.append(p2-p1)
+        return plot_data,improve_data
+def missing_at_random(dt,rate,target):
+    
+    dt_missing = dt.copy(deep=True)
+    
+    count =0
+    for i in dt.columns:
+#         if(i==target):
+#             continue
+        for j in range(0,len(dt_missing)):
+            if random.randint(1,11)<=rate*10:
+                dt_missing[i].iloc[j]=None
+                count +=1
+    return dt_missing
+"将预测结果的连续数据还原"
+def reduction_data_type(data,data_imp,max_type=20):
+    data = data.copy(deep=True)
+    data_imp = data_imp.copy(deep=True)
+    for col in data.columns:
+        ori_value = data[col].value_counts()
+#         print(" ori_value.index", ori_value.index)
+        if(len(ori_value)>max_type): #连续变量不需要还原
+            continue
+        neareast_value = 0
+        for row_index in data_imp.index: #离散变量还原
+            x = data_imp.loc[row_index,col]
+            min_distance = np.inf
+            for each_ori in ori_value.index:
+#                 print('min_distance >abs(x-each_ori):',min_distance,'>',x,'-','each_ori','=',abs(x-each_ori))
+                if(min_distance >abs(x-each_ori)):
+                    neareast_value = each_ori
+                    min_distance =abs(x-each_ori)
+                    if(min_distance ==0):
+                        break
+#             print("neareast_value",neareast_value)
+            data_imp.loc[row_index,col ] =neareast_value
+    return data_imp
+# print(df_miss_list[0][2])
+# X=df_miss_list[0][2].copy(deep=True)
+# X.iloc[0:X.shape[0],:] = knn_imp.fit_transform(X)
+# print(X)
+# X = reduction_data_type(df_miss_list[0][2],X)
+# X
+def NA(data_list):
+    return pd.concat(data_list,axis=0)
+def NCA(data_list,miss_matrix,maxClass=20):
+    X=data_list[0].copy(deep=True)
+    vote=False
+    for col_index in range(0,X.shape[1]):
+        if(len(X.iloc[:,col_index].value_counts())<maxClass):#是离散属性
+            vote=True
+        for row_index in range(0,X.shape[0]):
+            if(~miss_matrix[row_index,col_index]): #完整样本不动
+                continue
+            Mi_value = []
+            for each in data_list:
+                Mi_value.append(each.iloc[row_index,col_index])
+            if(vote):
+                X.iloc[row_index,col_index] = max(set(Mi_value),key=Mi_value.count) #求众数
+            else:
+                X.iloc[row_index,col_index] = sum(Mi_value)/len(Mi_value)
+    return X
+dt = DecisionTreeClassifier(criterion='gini',
+                            splitter='best',#划分策略，有best和Random
+                            min_samples_leaf = 5, #叶节点最小值
+                            #min_weight_fraction_leaf 不提供则视为等权
+                            max_features =None,# 参考的特征，None为全体
+                            random_state=0
+                           )
+from sklearn.neighbors import KNeighborsClassifier
+clf_k = KNeighborsClassifier(n_neighbors=5)
+k_imp =KNNImputer()
+s_imp = SimpleImputer()
+b_imp =IterativeImputer(estimator=BayesianRidge(),
+                                 missing_values=np.nan, 
+                                 sample_posterior=False,  #是否高斯采样
+                                 max_iter=5, #迭代的轮数
+                                 tol=0.001, #迭代早期停止条件
+                                 n_nearest_features=None, #使用全部特征
+                                 initial_strategy='mean',#初始填补策略
+                                 imputation_order='roman',#迭代顺序
+                                 skip_complete =True, #??
+                                 #min_value,max_value #最大最小补插值
+                                 #verbose #调试信息设置
+                                 random_state = 0
+                                )
+d_imp =IterativeImputer(estimator=DecisionTreeRegressor(random_state=20220325),
+                                 missing_values=np.nan, 
+                                 sample_posterior=False,  #是否高斯采样
+                                 max_iter=5, #迭代的轮数
+                                 tol=0.001, #迭代早期停止条件
+                                 n_nearest_features=None, #使用全部特征
+                                 initial_strategy='mean',#初始填补策略
+                                 imputation_order='roman',#迭代顺序
+                                 skip_complete =True, #??
+                                 #min_value,max_value #最大最小补插值
+                                 #verbose #调试信息设置
+                                 random_state = 0
+                                )
+r_imp=IterativeImputer(estimator=ExtraTreesRegressor(random_state=20220325),
+                                 missing_values=np.nan, 
+                                 sample_posterior=False,  #是否高斯采样
+                                 max_iter=5, #迭代的轮数
+                                 tol=0.001, #迭代早期停止条件
+                                 n_nearest_features=None, #使用全部特征
+                                 initial_strategy='mean',#初始填补策略
+                                 imputation_order='roman',#迭代顺序
+                                 skip_complete =True, #??
+                                 #min_value,max_value #最大最小补插值
+                                 #verbose #调试信息设置
+                                 random_state = 0
+                                )
+impueter_list=[k_imp,s_imp,d_imp,b_imp,r_imp]
+miss_indicator = MissingIndicator()
+def gspa(clf,par,X,y,weight=None):#拟合参数
+    from sklearn.model_selection import GridSearchCV
+    cv = GridSearchCV(clf, par)
+    if(weight!=None):
+        cv.fit(X,y,sample_weight=weight)
+    else:
+        cv.fit(X,y)
+ 
+return cv.best_estimator_
+def get_distance(data_list,miss_matrix,max_Class=20): #返回相等大小的矩阵，值为差异性
+    if(len(data_list)<2):
+        print("输入数据个数不足")
+        return 
+    #生成各属性的区间,存放在col_range中
+    col_range=[]
+    for col in  data_list[0].columns:
+        lower_limit = np.inf
+        upper_limit = -np.inf
+        for X in data_list: #X是其中一份填补数据
+            if(len(X[col].value_counts())<max_Class):
+                lower_limit  =0 
+                upper_limit = len(X[col].value_counts())
+            else:
+                lower_limit = min(min(X[col]),lower_limit)
+                upper_limit = max(max(X[col]),upper_limit)
+        col_range.append([lower_limit,upper_limit])
+    #融合后返回的权值，长度等于融合后的数据，完整数据的权重为1，填补数据为 Sum(-log(n/N))
+    distance=[]
+    for row_index in range(X.shape[0]): #按行遍历
+        distance_this_row=[]#获取数值型变量的distance_this_row
+        
+        row = miss_matrix[row_index]
+        miss_col_index = np.where(row>0)[0] #获取空值下标
+        for col_index in  range(0,X.shape[1]): #按列遍历
+            if(~col_index in miss_col_index):#完整数据填0
+                distance_this_row.append(0)
+                continue
+            
+            N = col_range[col_index][1] -col_range[col_index][0]  #获取取值空间
+            
+            Mi_value =[] #该缺失值的m个填补数据
+            for each_data in data_list:
+                Mi_value.append(each_data.iloc[row_index,col_index])
+            if( len(each_data.iloc[:,col_index].value_counts()) > max_Class):
+                x =  (max(Mi_value)-min(Mi_value)) /N
+            else:
+                x = (len(set(Mi_value))-1)/N
+            distance_this_row.append(x) 
+        distance.append(sum(distance_this_row)/len(distance_this_row))
+    return np.mean(distance)
+def test2(df_miss_list,est):
+    score_summary = pd.DataFrame([np.zeros(31),np.zeros(31),np.zeros(31)])
+    dis_summary  = pd.DataFrame([np.zeros(31),np.zeros(31),np.zeros(31)])
+    X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+    Y_test = df.loc[~df.T.isna().any(),target]
+    pars = [{'n_neighbors':[i for i in range(2,10)]},{'random_state':[0]}] 
+     
+    
+    for i in range(0,1):#i取值0-5，代表组数len(df_miss_list)
+        for j in range(0,len(df_miss_list[i])): #j取值0-3，代表缺失率
+            each_data=df_miss_list[i][j]
+            miss_indicator = MissingIndicator()
+            Xt=miss_indicator.fit_transform(each_data)
+            
+            #单模型补插
+            X_list=[]
+            n=0
+            for k in range(0,len(impueter_list)):
+                X0 = each_data.copy(deep=True)
+                X0.iloc[0:X0.shape[0],:] = impueter_list[k].fit_transform(each_data) #填补                
+                X0=reduction_data_type(each_data,X0) #还原数据类型
+                est .fit(X0.loc[:,X0.columns!=target],X0[target])
+                score_summary.iloc[i*3+j,n] += est.score(X_test,Y_test)
+                X_list.append(X0)
+                n+=1
+            #双模型补插
+            blend_index = list(combinations(X_list,2))
+            for each in blend_index:
+                X0=pd.concat([each[0], each[1]] )
+                est .fit(X0.loc[:,X0.columns!=target],X0[target])
+                score_summary.iloc[i*3+j,n] += est.score(X_test,Y_test)
+                n+=1
+            #三模型补插
+            blend_index = list(combinations(X_list,3))
+            for each in blend_index:
+                X0=pd.concat([each[0], each[1],each[2]])
+                est .fit(X0.loc[:,X0.columns!=target],X0[target])
+                score_summary.iloc[i*3+j,n] += est.score(X_test,Y_test)
+                n+=1
+            #四模型补插
+            blend_index = list(combinations(X_list,4))
+            for each in blend_index:
+                X0=pd.concat([each[0], each[1],each[2],each[3]])
+                est .fit(X0.loc[:,X0.columns!=target],X0[target])
+                score_summary.iloc[i*3+j,n] += est.score(X_test,Y_test)
+                n+=1
+            #五模型补插
+            X0=pd.concat(X_list)
+            est .fit(X0.loc[:,X0.columns!=target],X0[target])
+            score_summary.iloc[i*3+j,n] += est.score(X_test,Y_test)
+           
+    return score_summary
+df = pd.read_csv(r"D:\FIB\UCI数据集\分类任务\wine.csv")
+df.reset_index(drop=True,inplace=True)
+target='quality'
+warnings.simplefilter("ignore")
+df_miss_list =[]
+for n in range(0,5):
+    df_miss_list.append([])
+    for i in [0.1,0.3,0.5]:
+        df_miss=missing_at_random(dt=df,rate=i,target=target)
+        df_miss_list[n].append(df_miss)
+est=DecisionTreeClassifier(random_state=0,min_samples_leaf=5,max_depth=20,min_samples_split=18)
+pars=[{'min_samples_leaf':[i for i in range(1,10)]},
+      {'max_depth':[i for i in range(10,100,10)]},
+      {'min_samples_split':[i for i in range(2,20,2)]}
+     ]
+X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+Y_test = df.loc[~df.T.isna().any(),target]
+est=gspa(est,pars,X_test,Y_test)
+res=main(df_miss_list,est)
+n_score=[]
+n_score.append(np.mean(np.mean(res.iloc[:,0:5])))#单模型
+n_score.append(np.mean(np.mean(res.iloc[:,5:15])))#2模型
+n_score.append(np.mean(np.mean(res.iloc[:,15:25])))#3模型
+n_score.append(np.mean(np.mean(res.iloc[:,25:30])))#4模型
+n_score.append(np.mean(np.mean(res.iloc[:,30])))#5模型
+def select(data,weight):
+    #将data分为good data 与 bad data
+    from sklearn.cluster import KMeans
+    kmeans = KMeans(n_clusters=2, random_state=0).fit(np.array(weight).reshape(-1,1))
+    center = kmeans.cluster_centers_
+    good_cluster = 1
+    if(center[0]>0.5 and center[1]>0.5):
+        return data,weight
+    if(center[0]>center[1]): #权重大的是gd
+        good_cluster=0
+    cluster_label = kmeans.labels_
+    gd_index=[]
+    for i in range(0,len(weight)):
+        if(cluster_label[i]==good_cluster):
+            gd_index.append(i)
+    
+    return data.iloc[gd_index,:],np.array(weight)[gd_index]
+df = pd.read_csv("C:\\Users\\30531\\Desktop\\Moon\\UCI数据集\\分类任务\\wine.csv")
+target='quality'
+warnings.simplefilter("ignore")
+df_miss_list =[]
+for n in range(0,5):
+    df_miss_list.append([])
+    for i in [0.1,0.3,0.5]:
+        df_miss=missing_at_random(dt=df,rate=i,target=target)
+        df_miss_list[n].append(df_miss)
+plot_data,improve_data =main(df_miss_list)
+def get_ce_mean(data,target):
+    #计算CE值
+    #导包与初始化
+    clf = MLPClassifier(solver='lbfgs', alpha=1e-5,
+                        hidden_layer_sizes=(5, 2), random_state=1)
+    onehotencoder = OneHotEncoder( )
+    #p是target的one-hot-coder
+    p=onehotencoder.fit_transform(np.array(data.loc[:,target]).reshape(-1,1)).toarray() 
+    #loss_score用来存储每个样本的损失值
+    loss_score=[0]*len(data)
+    X = data.loc[:,data.columns!=target]
+    Y = data.loc[:,data.columns==target].astype(int)
+    clf.fit(X,Y)
+    q = clf.predict_proba(X) #y_pred 是predict的one-hot-coder
+    for i in range(0,len(q)):
+        
+        ce=log_loss(p[i],q[i])
+        loss_score[i] += ce
+    
+    return np.mean(loss_score)
+def iter_by_correction_target(data,target,imputer,alg,threshold=0.01): #输入data和有fit_transform方法的alg
+    data = data .copy(deep=True)
+    data_corection = data.copy(deep=True)
+    ce_last = np.inf
+    while(True):
+        #填补完成
+        imputer.fit(data_corection)
+        data_corection.loc[:,:] = imputer.transform(data)
+        data_corection= reduction_data_type(data,data_corection) #还原数据类型
+        #获取当前CE
+        ce= get_ce_mean(data_corection,target)
+        
+        #迭代停止条件，当前ce比上次更大，或是小于阈值
+        if((ce_last<ce) or (ce_last-ce<threshold)):
+            return data_corection
+        
+        #修正Target
+        data_corection[target] = alg.predict(data_corection.loc[:,data_corection.columns!=target])
+        ce_last=ce
+def select_by_coef(data,weight):
+    #将data分为good data 与 bad data
+    from sklearn.cluster import KMeans
+    kmeans = KMeans(n_clusters=2, random_state=0).fit(np.array(weight).reshape(-1,1))
+    center = kmeans.cluster_centers_
+    good_cluster = 1
+    if(center[0]>center[1]): #权重大的是gd
+        good_cluster=0
+    cluster_label = kmeans.labels_
+    gd_index=[]
+    for i in range(0,len(weight)):
+        if(cluster_label[i]==good_cluster):
+            gd_index.append(i)
+        
+    return data.iloc[gd_index,:],np.array(weight)[gd_index]
+def correct(data,target,weight,correcter) :
+    correcter.fit(data.loc[:,data.columns!=target],data[target])
+    new_data=data.copy(deep=True)
+    new_data.loc[:,target]=correcter.predict(data.loc[:,data.columns!=target])
+    new_weight=[1-i for i in weight]
+    x=pd.concat([data,new_data],axis=0)
+    w=weight+new_weight
+    
+    return x,w
+    
+def ce_select(data_list,loss_list): #一类融合，二类选小
+    import numpy as np
+    from sklearn.mixture import GaussianMixture
+    res=pd.DataFrame()
+    min_type_1_len= np.inf
+    type_1_data=[]
+    for k in range(0,len(data_list)):
+        data=data_list[k]
+        score=loss_list[k]
+        #数据转换
+        score = [np.log(1+i) for i in score]
+        #GMM聚类
+        gm = GaussianMixture(n_components=2, random_state=0).fit(np.array(score).reshape(-1,1))
+        clu_type=gm.predict(np.array(score).reshape(-1,1))
+        #记录0类的平均值和索引
+        type_0_index=[]
+        sum_0_score=0
+        for i in range(0,len(score)):
+            if(clu_type[i]==0):
+                type_0_index.append(i)
+                sum_0_score += score[i]
+        #一类融合
+        if(sum_0_score/len(type_0_index)>np.mean(score)): #0类均值大于总体均值，说明0类是错误类
+            res=res.append(data.loc[~data.index.isin(type_0_index),:])
+            print((len(data)-len(type_0_index)))
+            if(len(type_0_index)<min_type_1_len):
+                min_type_1_len =len(type_0_index)
+                type_1_data=data.loc[data.index.isin(type_0_index),:]
+        else:
+            res=res.append(data.loc[data.index.isin(type_0_index),:])
+            print(len(type_0_index))
+            if((len(data)-len(type_0_index))<min_type_1_len):
+                min_type_1_len =len(type_0_index)
+                type_1_data=data.loc[~data.index.isin(type_0_index),:]
+                
+    #二类选小
+    print(len(res))
+    res=res.append(type_1_data)
+    return res
+def get_result():
+    """
+    Table1:三种策略 最佳k，有序，融合
+    6种方法的最终结果
+    """
+    warnings.simplefilter("ignore")
+    score_summary = pd.DataFrame([np.zeros(6),np.zeros(6),np.zeros(6)],columns=['knn','rfc','bayes','NCA','Fraction','Complex'])
+    ce_summary = []
+    X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+    Y_test = df.loc[~df.T.isna().any(),target]
+    time_use = []
+    for n in range(0,5):
+        i=0
+        for each_df in df_miss_list[n]:
+            Xt=miss_indicator.fit_transform(each_df)
+            X0 = each_df.copy(deep=True)
+            X0.iloc[0:X0.shape[0],:] = k_imp.fit_transform(X0)
+            dt.fit(X0.loc[:,X0.columns!=target],X0.loc[:,target].astype(int))
+            score_summary.loc[i,'knn'] += dt.score(X_test,Y_test.astype(int))
+            X1 = each_df.copy(deep=True)
+            X1.iloc[0:X1.shape[0],:] = d_imp.fit_transform(X1)
+            dt.fit(X1.loc[:,X1.columns!=target],X1.loc[:,target].astype(int))
+            score_summary.loc[i,'rfc'] += dt.score(X_test,Y_test.astype(int))
+            X2 = each_df.copy(deep=True)
+            X2.iloc[0:X2.shape[0],:] = b_imp.fit_transform(X2)
+            dt.fit(X2.loc[:,X2.columns!=target],X2.loc[:,target].astype(int))
+            score_summary.loc[i,'bayes'] += dt.score(X_test,Y_test.astype(int))
+            #修改区
+            X0 =reduction_data_type(df,X0)
+            X1 =reduction_data_type(df,X1)
+            X2 =reduction_data_type(df,X2)
+            #NCA均值\众数融合
+            res_nca = NCA([X0,X1,X2],Xt)
+            dt.fit(res_nca.loc[:,res_nca.columns!=target],res_nca.loc[:,target].astype(int))
+            score_summary.loc[i,'NCA'] += dt.score(X_test,Y_test.astype(int))
+            #MR
+            loss_list=cross_loss([X0,X1,X2],target)
+            res=ce_select([X0,X1,X2],loss_list)
+            dt.fit(res.loc[:,res.columns!=target],res.loc[:,target].astype(int))
+            score = dt.score(X_test,Y_test.astype(int))
+            score_summary.loc[i,'Fraction'] += score
+            #Complex
+    #         res=complex_control(res_nca,res,loss_list)
+    #         dt.fit(res.loc[:,res.columns!=target],res.loc[:,target].astype(int))
+    #         score = dt.score(X_test,Y_test.astype(int))
+    #         score_summary.loc[i,'Complex'] += score
+            i+=1
+    score_summary *=20
+    print(score_summary)
+def cross_loss(data_list,target):
+    #计算CE值
+    #导包与初始化
+    from sklearn.model_selection import RepeatedStratifiedKFold
+    from sklearn.metrics import log_loss
+    from sklearn.preprocessing import  OneHotEncoder
+    from sklearn.neural_network import MLPClassifier
+    clf = MLPClassifier(solver='lbfgs', alpha=1e-5,
+                        hidden_layer_sizes=(5, 2), random_state=1)
+    onehotencoder = OneHotEncoder( )
+    loss_list=[]
+    for data in data_list:
+        #x是target的one-hot-coder
+        p=onehotencoder.fit_transform(np.array(data[target]).reshape(-1,1)).toarray() 
+        #loss_score用来存储每个样本的损失值
+        loss_score=[0]*len(data)
+       
+        X = data.loc[:,data.columns!=target]
+        Y = data.loc[:,data.columns==target]
+        clf.fit(X,Y)
+        q = clf.predict_proba(X) #y_pred 是predict的one-hot-coder
+        for i in range(0,len(q)):
+            ce=log_loss(p[i],q[i])
+            loss_score[i] += ce
+        loss_list.append(loss_score)
+    
+    return loss_list
+def merge_by_model(data,alg_list):
+    from sklearn.impute import MissingIndicator
+    indicator = MissingIndicator()
+    data_iter = data.copy(deep=True)
+    
+    for iter_time in range(0,data.shape[1]):#整体处在一个迭代中,终止的条件是最大次数小于列数
+        res_list=[]
+        for alg in alg_list:#获取填补结果，存放到res_list中
+            data_temp = data_iter.copy(deep=True)
+            data_temp.iloc[:,:] = alg.fit_transform(data_iter)  
+            res_list.append(data_temp)
+        Xt=indicator.fit_transform(data_iter)#获取Xt
+        distance_matrix = get_distance(res_list,Xt)#获取差异度
+        
+        for i in range(0,data.shape[0]) :#按行遍历
+####找到第iter_time小差异的值
+            min_col_index = distance_matrix[i].index(sorted(distance_matrix[i])[iter_time])
+###随机选择一个值用最小差异替换掉原本数据
+            new_value=res_list[np.random.randint(0,len(alg_list))].iloc[i,min_col_index]
+            #替换掉原始数据
+            data_iter.iloc[i,min_col_index] = new_value
+    return data_iter
+def empower(data_list,target):
+    clf = MLPClassifier(random_state=1,hidden_layer_sizes=(100),max_iter=50,learning_rate_init=0.01)
+    #分别计算多种方法的CE分布
+    ce_list=[]
+    for data in data_list:     
+        clf.fit(data.loc[:,data.columns!=target],data.loc[:,data.columns==target])
+        onehotencoder = OneHotEncoder( )
+        p = onehotencoder.fit_transform(np.array(data[target]).reshape(-1,1)).toarray() 
+        q = clf.predict_proba(np.array(data.loc[:,data.columns!=target]))
+        ce=[]
+        for i in range(0,len(data)):#循环每一个有空缺值的数据
+            ce.append(log_loss(p[i],q[i]))
+        ce_list.append(ce)
+    #计算调整系数
+    mce=[np.mean(i) for i in ce_list]
+    sumce=0
+    for i in range(0,len(mce)):
+        sumce += mce[0]/mce[i]
+    k=[] #K存储调整系数
+    k0=1/sumce
+    for i in range(0,len(mce)):
+        k.append(k0*mce[0]/mce[i])
+    #为样本赋值
+    weight = []
+    for i in range(0,len(data_list)):
+        
+        good=[np.exp(-j) for j in ce_list[i]]
+        weight.append([g*k[i] for g in good])
+    res = []
+    
+    for i in range(0,len(weight)):
+        res.extend(weight[i])
+    minK=np.min(res)
+    maxK=np.max(res)
+    return [i+(1-maxK) for i in res]#最小化调整系数
+def plot(data):
+    sns.set_style('white')
+    name='wine'
+    plt.figure(figsize=(8,4))#绘制画布
+    ax1 = sns.distplot(data[0],bins=10,kde=True,hist=True,label='0')
+    for i in range(1,len(data)):
+        sns.distplot(data[i],bins=10,kde=True,hist=True,label=i)
+    
+    ax1.yaxis.label.set_size(30)
+    plt.xticks(rotation=0,size=20)
+    plt.yticks(rotation=0,size=20)
+    plt.grid(linestyle = '--')     # 添加网格线
+    plt.title(name,{'family' : 'Times New Roman','weight' : 'normal','size' : 30,})  # 添加图表名
+    plt.xlabel("Probability",{'family' : 'Times New Roman','weight' : 'normal','size' : 30,})
+    plt.ylabel("Density",{'family' : 'Times New Roman','weight' : 'normal','size' : 30,})
+    plt.legend(prop={'family' : 'Times New Roman','weight' : 'normal','size' : 15,})
+def SA_optimize(data,target,miss_matrix,imputer):
+    data_imp = data.copy(deep=True)
+    data_imp.loc[:,:] = imputer.fit_transform(data)
+    data_imp = reduction_data_type(data,data_imp)#填补并还原数据类型
+    
+    clf = MLPClassifier(random_state=1,hidden_layer_sizes=(500))
+  
+    clf.fit(data_imp.loc[:,data_imp.columns!=target],data_imp.loc[:,data_imp.columns==target])
+    onehotencoder = OneHotEncoder( )
+    p = onehotencoder.fit_transform(np.array(data_imp[target]).reshape(-1,1)).toarray() 
+    for i in range(0,len(data)):#循环每一个有空缺值的数据
+        
+        start_time = datetime.datetime.now()
+        miss_col_index = np.where(miss_matrix[i]>0)[0] #空缺值作为输入
+        
+        x0 = data_imp.iloc[i,miss_col_index] #x0是空缺列
+          
+        x = data_imp.iloc[i,:] # x是整体
+        
+ 
+        #计算损失函数
+        def demo_func(x0):   
+            x[miss_col_index]=x0
+            q = clf.predict_proba(np.array(x[x.keys()!=target]).reshape(1,-1))
+            return log_loss(p[i],q[0])
+        #以knn的填补结果为初始值
+        sa = SA(func=demo_func, x0=x0, T_max=1, T_min=1e-9, L=300, max_stay_counter=1)
+        best_x, best_y = sa.run()
+        data_imp.iloc[i,miss_col_index]=best_x
+        
+        end_time = datetime.datetime.now()
+        
+    print(data_imp)
+    return data_imp
+def RBE_P(df_miss_list):#df_miss_list 5 行 3 列
+    for gi in range(0,len(df_miss_list )): 
+        for gj in range(0,len(df_miss_list[0])):
+            each_data=df_miss_list[gi][gj]
+            X0 = each_data.copy(deep=True)
+            miss_indicator = MissingIndicator()
+            Xt=miss_indicator.fit_transform(X0)
+            X0.iloc[0:X0.shape[0],:] = b_imp.fit_transform(X0)
+            X0=reduction_data_type(df_miss_list[0][0],X0)
+            
+            X=X0.loc[:,X0.columns!=target]
+            y=X0.loc[:,X0.columns==target]
+            dt.fit(X,y)
+            Fi = permutation_importance(dt, X, y, n_repeats=10,random_state=0).importances_mean
+          
+            res=rbf(X0,target,Fi,Xt)
+            
+            dt.fit(df.loc[:,df.columns!=target],df.loc[:,df.columns==target]) #dt是x0训练出来的
+            _predict_res = dt.predict(X0.loc[:,X0.columns!=target]) #输入X0
+            right_rbf=[]
+            wrong_rbf=[]
+            for k in range(0,len(_predict_res)):
+                if(_predict_res[k]==X0.loc[k,target]):
+                    right_rbf.append(res[k])
+                else:
+                    wrong_rbf.append(res[k])
+      
+            #res一百等分
+            max_rbf=max(res)
+            min_rbf=min(res)
+            
+            od = (max_rbf-min_rbf)/10
+            x=[min_rbf+i*od for i in range(0,11)]
+            
+             
+            alln=list(pd.cut(res,x).value_counts())
+            
+            rn=list(pd.cut(right_rbf,x).value_counts())
+            
+            p=[]
+            for i in range(0,len(alln)):
+                if(alln[i]!=0):
+                    p.append(rn[i]/alln[i])
+                else:
+                    p.append(0)
+            plt.plot(x[0:10],p)    
+        plt.show()
+def MR_CELoss(df_miss_list):
+    for each_group in df_miss_list:
+        for each_data in each_group:
+            X0 = each_data.copy(deep=True)
+            miss_indicator = MissingIndicator()
+            Xt=miss_indicator.fit_transform(X0)
+            X0.iloc[0:X0.shape[0],:] = d_imp.fit_transform(X0)
+            X0=reduction_data_type(df_miss_list[0][0],X0)
+            ce=empower(X0,target)
+            dt.fit(df.loc[:,df.columns!=target],df.loc[:,df.columns==target])
+            _predict_res = dt.predict(X0.loc[:,X0.columns!=target])
+            missr=mr(X0,target,Xt)
+            right_plot=[[],[]]
+            wrong_plot=[[],[]]
+            for k in range(0,len(_predict_res)):
+                if(_predict_res[k]==each_data.loc[k,target]):
+                    right_plot[0].append(ce[k])
+                    right_plot[1].append(missr[k])
+                else:
+                    wrong_plot[0].append(ce[k])
+                    wrong_plot[1].append(missr[k])
+            plt.scatter(x=right_plot[1],y=right_plot[0],c='g',marker='o',alpha=0.5)
+            plt.scatter(x=wrong_plot[1],y=wrong_plot[0],c='r',marker='o',alpha=0.5)
+            plt.show()
+def knn_iter(data):
+    data= data.copy(deep=True)
+    data['miss_num'] =  data.T.isna().sum()
+    data.sort_values(by='miss_num',ascending=True,inplace=True)
+    data.drop(columns=['miss_num'],inplace=True)
+    "POINT"
+    knn_imp = KNNImputer(n_neighbors=5)
+    i = 0
+    while(i<data.shape[0]-2):
+        knn_imp.fit(data)
+        data.iloc[i:i+1,:]=knn_imp.transform(data.iloc[i:i+1,:])  
+        i+=2
+        print(data.loc[i:i+1,:])
+    return data
+"""
+     lightGBM回归 : 
+         数据集划分
+         生成 - 训练
+         预测 - 输出
+ """
+from lightgbm import LGBMRegressor
+from sklearn import metrics
+from sklearn.model_selection import train_test_split 
+from sklearn.model_selection import RepeatedKFold
+import math
+import warnings 
+warnings.filterwarnings('ignore') # 忽视异常
+##建模-预测-输出
+def lgb_reg(data,target,test_size ):
+    y=data[target]
+    x=list(data.columns)
+    x.remove(target)
+    x=data[x]
+    ##生成模型
+    feature_importance_df = pd.DataFrame()
+    params = {'num_leaves': 60,
+              'min_data_in_leaf': 30,
+              'objective': 'regression',
+              #'num_class': 10,
+              'max_depth': -1,
+              'learning_rate': 0.03,
+              "min_sum_hessian_in_leaf": 6,
+              "boosting": "gbdt",
+              "feature_fraction": 0.9,
+              "bagging_freq": 1,
+              "bagging_fraction": 0.8,
+              "bagging_seed": 11,
+              "lambda_l1": 0.1,
+              "verbosity": -1,
+              "nthread": -1,
+              'metric': 'rmse',
+              "random_state": 2019,
+              # 'device': 'gpu' 
+              }
+    lgb =LGBMRegressor(**params)
+    #两种训练、预测、输出的过程
+    train_x, test_x, train_y, test_y = train_test_split(x,y, shuffle = True, random_state = 18,test_size=test_size)
+    train_x =missing_at_random(train_x,0,target)
+    lgb.fit(train_x,train_y)
+    #测试和输出
+    print(test_y)
+    print(lgb.predict(test_x))
+    res=metrics.mean_absolute_error(test_y,lgb.predict(test_x))
+    return res,lgb
+""" lgb分类"""
+from lightgbm import LGBMClassifier
+from sklearn import metrics
+from sklearn.model_selection import train_test_split 
+from sklearn.model_selection import RepeatedKFold
+import math
+import warnings 
+warnings.filterwarnings('ignore') # 忽视异常
+##建模-预测-输出
+def lgb_clas(data,target,test_size,clas_num):
+    y=data[target]
+    x=list(data.columns)
+    x.remove(target)
+    x=data[x]
+    ##生成模型
+    feature_importance_df = pd.DataFrame()
+    params = {'num_leaves': 60,
+              'min_data_in_leaf': 30,
+              'objective': 'multiclass',
+              #'num_class': 10,
+              'max_depth': -1,
+              'learning_rate': 0.03,
+              "min_sum_hessian_in_leaf": 6,
+              "boosting": "gbdt",
+              "feature_fraction": 0.9,
+              "bagging_freq": 1,
+              "bagging_fraction": 0.8,
+              "bagging_seed": 11,
+              "lambda_l1": 0.1,
+              "verbosity": -1,
+              "nthread": -1,
+              'metric': 'rmse',
+              "random_state": 2019,
+              # 'device': 'gpu' 
+              }
+    lgb =LGBMClassifier(**params)
+    #两种训练、预测、输出的过程
+    train_x, test_x, train_y, test_y = train_test_split(x,y, shuffle = True, random_state = 18,test_size=test_size)
+    train_x =missing_at_random(train_x,0,target)
+    lgb.fit(train_x,train_y)
+    #测试和输出
+    res=metrics.accuracy_score(test_y.astype('int'),lgb.predict(test_x))
+    return res,lgb
+""" knn回归"""
+#sklearn的核心：导包->建模->生成->预测
+from sklearn import neighbors #导包
+import numpy as np
+import math
+from sklearn.model_selection import train_test_split 
+def knn_reg(data,target,test_size): #遍历寻找最好的k,经验性的参数是从2-> sqrt(n)
+    y=data[target]
+    x=list(data.columns)
+    x.remove(target)
+    x=data[x]
+    train_x, test_x, train_y, test_y = train_test_split(x,y, shuffle = True, random_state = 18,test_size=test_size)
+    res=9999
+    k_best=2
+    for k in range(2,int(math.sqrt(data.shape[0]))):
+        knn = neighbors.KNeighborsRegressor(k, weights="uniform") #建模
+        knn.fit(np.array(train_x), np.array(train_y)) #生成
+        res_now = metrics.mean_absolute_error(test_y,knn.predict(test_x))#预测
+        if res_now < res:
+            res = res_now
+            k_best = k
+    return res,k_best
+"""knn分类"""
+#按照导包、建模（声明、拟合）、预测
+from sklearn.neighbors import KNeighborsClassifier
+def knn_clas(data,target,test_size,clas_num):
+    y=data[target].astype(str)
+    x=list(data.columns)
+    x.remove(target)
+    x=data[x]
+    train_x, test_x, train_y, test_y = train_test_split(x,y, shuffle = True, random_state = 18,test_size=test_size)
+    res=9999
+    k_best=2
+    for k in range(2,int(math.sqrt(data.shape[0]))):
+        knn = KNeighborsClassifier(k, weights="uniform") #建模
+        knn.fit(np.array(train_x), np.array(train_y)) #生成
+        res_now = metrics.accuracy_score(test_y,knn.predict(test_x))#预测
+        if res_now < res:
+            res = res_now
+            k_best = k
+    return res,k_best
+"""建模、比较最好的模型、进入模型列表"""
+#对于每个缺失列建模预测
+because = list(df_miss.columns)
+because . remove('mpg')
+model_list = []
+for each in null_col:
+    #performance=model_predict(data=df_miss[~df_miss[each].isnull()],target=each,test_size=0.2,cv_n=10,cv_k=5,use_cv=False)
+    if target_list[target_list['name']==each]['回归'].values[0] == 0:
+        knn_per,knn=knn_reg(data=df_miss[~df_miss.isnull().T.any()][because],target=each,test_size=0.2)
+        lgb_per,lgb=lgb_reg(data=df_miss[~df_miss.isnull().T.any()][because],target=each,test_size=0.2)
+    else :
+        knn_per,knn=knn_clas(data=df_miss[~df_miss.isnull().T.any()][because],target=each,test_size=0.2,
+                         clas_num = target_list[target_list['name']==each]['分类'])
+        lgb_per,lgb=knn_clas(data=df_miss[~df_miss.isnull().T.any()][because],target=each,test_size=0.2,
+                         clas_num = target_list[target_list['name']==each]['分类'])
+    if(knn_per >= lgb_per):
+        model_list.append(knn)
+    else:
+        model_list.append(lgb)
+print("模型",model_list)
+        
+    
+    """根据模型列表，有序预测，生成填补后数据 
+#显示所有列
+pd.set_option('display.max_columns', None)
+#显示所有行
+pd.set_option('display.max_rows', None)
+from sklearn.impute import KNNImputer
+df_imp = df_miss[because].copy(deep=True)
+for j in range(0,len(model_list)):
+    each=model_list[j] #list中[]获取第一个
+    need = list(df_imp.columns)#辅助变量need:表示本次所使用的的数据
+    target = need.pop(j) #pop是按下标，remove是按值
+    if(type(each)==int): #knn的处理
+        imputer = KNNImputer(n_neighbors=each)
+        imputer.fit(df_imp[because]) #用所有数据拟合
+        res_knn = pd.DataFrame(imputer.transform(df_imp[df_imp.iloc[:,[j]].isnull().T.any()])).iloc[:,[j]] #填补空缺数据
+        
+        res_knn.columns=[target]#部分重命名用rename,全部重置用columns 
+        res_knn.index=df_imp.iloc[:,[j]] [df_imp.iloc[:,[j]].isnull().T.any()].index #重置index
+        
+        df_imp.loc[res_knn.index,res_knn.columns] = res_knn
+        df_imp.iloc[:,[j]].where(df_imp.notnull(),axis=1,inplace=True,other=res_knn)
+         
+    else:
+        res_lgb = pd.DataFrame(each.predict(df_imp[need][ df_imp.iloc[:,[j]].isnull().T.any() ]))
+        res_lgb.index = df_imp[need][ df_imp.iloc[:,[j]].isnull().T.any() ].index
+        res_lgb.columns =  df_imp.iloc[:,[j]] .columns
+        df_imp.loc[res_lgb.index,res_lgb.columns]=res_lgb
+  """
+"""根据模型列表，从原始数据预测，去掉顺序 """
+#显示所有列
+pd.set_option('display.max_columns', None)
+#显示所有行
+pd.set_option('display.max_rows', None)
+from sklearn.impute import KNNImputer
+df_imp = df_miss[because].copy(deep=True)
+for j in range(0,len(model_list)):
+    each=model_list[j] #list中[]获取第一个
+    need = list(df_imp.columns)#辅助变量need:表示本次所使用的的数据
+    target = need.pop(j) #pop是按下标，remove是按值
+    if(type(each)==int): #knn的处理
+        imputer = KNNImputer(n_neighbors=each)
+        imputer.fit(df_miss[because]) #用所有数据拟合
+        res_knn = pd.DataFrame(imputer.transform(df_imp[df_imp.iloc[:,[j]].isnull().T.any()])).iloc[:,[j]] #填补空缺数据
+        
+        res_knn.columns=[target]#部分重命名用rename,全部重置用columns 
+        res_knn.index=df_imp.iloc[:,[j]] [df_imp.iloc[:,[j]].isnull().T.any()].index #重置index
+        
+        df_imp.loc[res_knn.index,res_knn.columns] = res_knn
+        #df_imp.iloc[:,[j]] [df_imp.iloc[:,[j]].isnull().T.any()].fillna(res_knn,inplace=True)
+        #df_imp.iloc[:,[j]] .fillna(res_knn,inplace=True,axis=1)
+        #df_imp.iloc[:,[j]] .fillna(1,inplace=True,axis=1)
+        df_imp.iloc[:,[j]].where(df_imp.notnull(),axis=1,inplace=True,other=res_knn)
+        #print("res_knn",res_knn,"df_imp",df_imp.iloc[:,[j]] [df_imp.iloc[:,[j]].isnull().T.any()]  )
+         
+    else:
+        res_lgb = pd.DataFrame(each.predict(df_imp[need][ df_imp.iloc[:,[j]].isnull().T.any() ]))
+        res_lgb.index = df_imp[need][ df_imp.iloc[:,[j]].isnull().T.any() ].index
+        res_lgb.columns =  df_imp.iloc[:,[j]] .columns
+        df_imp.loc[res_lgb.index,res_lgb.columns]=res_lgb
+        #print("res_lgb",res_lgb,"df_imp",df_imp.iloc[:,[j]] [df_imp.iloc[:,[j]].isnull().T.any()]  ) 
+"""
+     lightGBM回归 : 
+         数据集划分
+         生成 - 训练
+         预测 - 输出
+ """
+from lightgbm import LGBMRegressor
+from sklearn import metrics
+from sklearn.model_selection import train_test_split 
+from sklearn.model_selection import RepeatedKFold
+import math
+import warnings 
+warnings.filterwarnings('ignore') # 忽视异常
+##建模-预测-输出
+def model_predict(data,data_rep,target,test_size,cv_n,cv_k,use_cv=True,rate=0):
+    if rate==0:
+        data_rep=missing_at_random(dt=data,rate=rate,target=target) #缺失      
+    y=data_rep[target]
+    x=list(data_rep.columns)
+    x.remove(target)
+    X=x
+    x=data_rep[x]
+    ##生成模型
+    feature_importance_df = pd.DataFrame()
+    params = {'num_leaves': 60,
+              'min_data_in_leaf': 30,
+              'objective': 'regression',
+              #'num_class': 10,
+              'max_depth': -1,
+              'learning_rate': 0.03,
+              "min_sum_hessian_in_leaf": 6,
+              "boosting": "gbdt",
+              "feature_fraction": 0.9,
+              "bagging_freq": 1,
+              "bagging_fraction": 0.8,
+              "bagging_seed": 11,
+              "lambda_l1": 0.1,
+              "verbosity": -1,
+              "nthread": -1,
+              'metric': 'rmse',
+              "random_state": 2019,
+              # 'device': 'gpu' 
+              }
+    lgb =LGBMRegressor(**params)
+    #两种训练、预测、输出的过程
+    if use_cv==True:
+        rkf = RepeatedKFold(n_splits=cv_n, n_repeats=cv_k)
+        res=[]
+        for train_index,test_index in rkf.split(x):
+            train_x = x.iloc[train_index]
+            test_x = x.iloc[test_index]
+            train_y = y.iloc[train_index]
+            test_y = y.iloc[test_index]
+            lgb.fit(train_x,train_y.astype('int'))
+            real_x=data[X].loc[test_x.index] #预测未修改的x
+            real_y=data[target].loc[test_y.index]
+            res.append(metrics.mean_squared_error(real_y.astype('int'),lgb.predict(real_x)))
+        sum = 0
+        for each in res:
+            sum += math.sqrt(each)
+        print(sum/len(res))
+        return sum/len(res)
+    else:
+        train_x, test_x, train_y, test_y = train_test_split(x,y, shuffle = True, random_state = 18,test_size=test_size)
+        train_x =missing_at_random(train_x,rate,target)
+        lgb.fit(train_x,train_y.astype('int'),multi_class='ovo')
+        #测试和输出
+        res=metrics.roc_auc_score(test_y.astype('int'),lgb.predict(test_x))
+        print(res)
+        return res
+"""knn列有序填补"""
+from sklearn.impute import KNNImputer
+res_list =[] #用来存放最终结果的
+each_count = 0
+best_k = pd.DataFrame(columns=['rate','col','k']) #用来缓存最佳k
+for each1 in df_miss_list:
+    each = each1.copy(deep=True) #each是当前df_miss
+    sort_df =pd.DataFrame(columns=['col_name','rate']) #用来决定排序顺序的
+    for j in each.columns:
+        new = pd.DataFrame({'col_name':j,'rate':each[j].isnull().sum() / each.shape[0]},index=[0]) #属性名-缺失率
+        sort_df = sort_df.append(new,ignore_index=True) #加入sort_df
+        
+    sort_df.sort_values(by='rate',ascending=True) #升序，第一列是最小缺失率
+    for col in sort_df['col_name']: #对每一列都有序填补,并计算最合适的k值
+        
+        res_mid = pd.DataFrame(columns=['k','score']) #中间结果 ,存k - score
+        
+        for i in range(1,int(math.sqrt(df.shape[0]))):
+            knn_imp = KNNImputer(n_neighbors=i)
+            temp = pd.DataFrame(knn_imp.fit_transform(each))
+            temp.columns = each.columns
+            temp.index = each.index #temp是一次填补后的df_imp
+            temp =pd.DataFrame({'k':i,'score': model_predict
+                                (data=df,data_rep=temp,target='mpg',test_size=0.2,cv_k=5,cv_n=10,rate=1)},index=[0])#temp是k_score
+            res_mid = res_mid.append(temp)
+            
+        res_mid=res_mid.sort_values(by='score',ascending=True) #回归是升序，分类是降序
+        
+        knn_imp=KNNImputer(n_neighbors=res_mid.iloc[0,0]) #根据找到的best_k换掉一列数据
+        temp = pd.DataFrame(knn_imp.fit_transform(each))
+        temp.columns = each.columns
+        temp.index = each.index
+        each[col] = temp[col] #替换调一列
+        
+        temp =pd.DataFrame({'rate':each_count,'col':col,'k':res_mid.iloc[0,0]},index=[0])
+        best_k = best_k.append(temp)
+        
+    res_list.append(model_predict(data=df,data_rep=each,target='mpg',test_size=0.2,cv_k=5,cv_n=10,rate=1))
+    each_count += 1
+print(res_list)
+            
+"""
+获取判定结果的函数
+I:col : 列名 ，each:df ，
+O:有0/1的List， 0代表不填充，1代表填充
+C:计算每一个属性的填充策略，存储到strategy_col
+"""
+def get_stra_col(col,each,target):
+    X,lgb=lgb_clas(data=each,target=target,test_size=0.2)
+    stra_col=[]
+    for col in each: 
+        #去掉目标列
+        if col =='mpg':
+            continue
+        #计算缺失率
+        rate = each[col].isnull().sum() / (each.shape[0])
+        #计算准确率
+        acc,lbg= lgb_clas(data=each[~each[col].isnull()],target=col,test_size=0.2)
+        iteration = 1 / ( (acc/rate) - (acc*(1-acc)/ rate**2) )
+        if(iteration <= X):
+            stra_col.append(0)
+        else:
+            stra_col.append(1)
+    return stra_col
+def dispeard(data,col_dis):
+    data_ret = data.copy(deep=True)
+    j=0
+    for each in col_dis:
+        if(each == 0):
+            j+=1
+            continue
+        k = 100   #k值为组数
+        data_ret.iloc[:,j] = pd.cut(df_miss_list[0].iloc[:,0],k,labels=range(k))   #将集合分组
+        j+=1
+    return data_ret
+"""
+为每列获取最佳k值的函数
+"""
+def get_best_k(data,miss):
+    best_k = pd.DataFrame(columns=['col','k'])
+    for col in list(miss.columns): #对每一列都有序填补,并计算最合适的k值
+        res_mid = pd.DataFrame(columns=['k','score']) #中间结果 ,存k - score
+        for i in range(1,int(math.sqrt(data.shape[0]))):
+            knn_imp = KNNImputer(n_neighbors=i)
+            temp = pd.DataFrame(knn_imp.fit_transform(each))
+            temp.columns = each.columns
+            temp.index = each.index #temp是一次填补后的df_imp
+            temp =pd.DataFrame({'k':i,'score':lgb_clas
+                                (data_or=df,data=temp,target='mpg',test_size=0.2)},index=[0])#temp是k_score
+            res_mid = res_mid.append(temp)
+        res_mid=res_mid.sort_values(by='score',ascending=True) #回归是升序，分类是降序
+        temp =pd.DataFrame({'col':col,'k':res_mid.iloc[0,0]},index=[0])
+        best_k = best_k.append(temp)
+    return best_k
+"""rfc分类，并输出预测结果"""
+def rfc_clas(data,target,test_size=0.2,data_or=df):
+    
+    rfc = RandomForestClassifier()
+    
+    x = list(data.columns)
+    x.remove(target)
+    y = target   
+    
+     #交叉验证 5折10次
+    rskf =  RepeatedStratifiedKFold(n_splits=2, n_repeats=5)
+    
+    #获取rkf的下标
+    res =[]
+    
+    for train_index,test_index in rskf.split(data[x],data[y]):
+        
+        #获取这次训练的数据
+        train_x = data[x].iloc[train_index]
+        train_y = data[y].iloc[train_index]
+        #预测未修改的x
+        real_x=data_or[x].iloc[test_index] 
+        real_y=data_or[y].iloc[test_index]
+        
+        rfc.fit(train_x,train_y)
+        
+        #预测真实数据
+        
+        res_this_time =metrics.accuracy_score(real_y.astype(int),rfc.predict(real_x))
+        res .append( res_this_time)
+    return sum(res)/len(res)
+"""
+    输入data,target
+    输出补全后的data
+"""
+def imp_rfc(data,target=None):
+    data_copy = data.copy(deep=True)
+    
+    #默认情况是全部填补 ,sindex 是属性小标的集合，按照集合顺序填补
+    if(target==None):
+        sindex = np.argsort(data_copy.isna().sum().values.tolist()) #将有缺失值的列按缺失值的多少由小到大
+    
+    #特殊情况是填补一列 ，sindex只包含一个值
+    else :
+        sindex = list(data.columns).index(target)
+        sindex_temp = []
+        sindex_temp.append(sindex)
+        sindex = sindex_temp
+        
+    # 进入for循环进行空值填补
+    for i in sindex:              #i是要填补的列的下标         
+         
+        if data_copy.iloc[:,i].isna().sum() == 0:             # 将没有空值的行过滤掉
+            continue                                          # 直接跳过当前的for循环
+            
+        temp = data_copy                                        # temp是本次的X
+        
+        temp = temp.iloc[list(data.columns).remove(target)]           # 除了这列以外的数据，之后作为X
+        
+        temp_0 = SimpleImputer(missing_values=np.nan,           # 将df的数据全部用0填充
+                             strategy="constant",
+                             fill_value=0).fit_transform(temp)
+        
+        fillc = temp.iloc[:,i]                                  # Y
+        
+        print("\nfillc\n",fillc,"\ntemp_0:\n",temp_0)
+        
+        Ytrain = fillc[fillc.notnull()]                       # 在fillc列中,不为NAN的作为Y_train
+        Ytest = fillc[fillc.isnull()]                         # 在fillc列中,为NAN的作为Y_test 
+        
+        Xtrain = temp_0[Ytrain.index,:]                         # 在df_0中(已经填充了0),中那些fillc列不为NAN的行作为Xtrain
+        Xtest = temp_0[Ytest.index,:]                           # 在df_0中(已经填充了0),中那些fillc等于NAN的行作为X_test
+        rfc = RandomForestClassifier()
+        rfc.fit(Xtrain,Ytrain)
+        
+        Ypredict = rfc.predict(Xtest)                         #Ytest为了定Xtest,以最后预测出Ypredict
+    
+        
+        data_copy.loc[data_copy.iloc[:,i].isnull(),data_copy.iloc[:,i]] = Ypredict    
+    # 将data_copy中data_copy在第i列为空值的行,第i列,改成Ypredict
+    
+    return data_copy
+"""
+randomForest混合策略
+"""
+#存储最终结果 
+res_final =[]
+for each1 in df_miss_list:
+    
+    each = each1.copy(deep=True)
+    
+    #迭代填补
+    for col in each1.columns:
+        
+        #获取当前策略
+        stra_col = get_stra_col(each,target=col,agent='rfc')
+       
+        print(stra_col)
+        #所有标签为1的均填补
+        i=0
+        for flag in stra_col:
+            
+            if(flag == 1):
+                
+                #填补该列
+                each.iloc[:,i] = imp_rfc(data,target=col).iloc[:,i]          
+                
+                #填补完成后置0
+                stra_col[i]=0
+            i+=1
+        #退出条件
+        if(sum(stra_col)==0):
+            break
+            
+    #填补完成，获取最终结果
+    res_final.append(lgb_clas(data=each,target='mpg',test_size=0.2,data_or=df))
+    
+print(res_final)
+        
+    
+"""
+    输入data,target
+    输出补全后的data
+"""
+def imp_rfc_2(data,target=None):
+    data_copy = data.copy(deep=True)
+    
+    #默认情况是全部填补 ,sindex 是属性小标的集合，按照集合顺序填补
+    if(target==None):
+        sindex = np.argsort(data_copy.isna().sum().values.tolist()) #将有缺失值的列按缺失值的多少由小到大
+    
+    #特殊情况是填补一列 ，sindex只包含一个值
+    else :
+        sindex = list(data.columns).index(target)
+        sindex_temp = []
+        sindex_temp.append(sindex)
+        sindex = sindex_temp
+        
+    # 进入for循环进行空值填补
+    for i in sindex:              #i是要填补的列的下标         
+         
+        if data_copy.iloc[:,i].isna().sum() == 0:             # 将没有空值的行过滤掉
+            continue                                          # 直接跳过当前的for循环
+            
+        temp = data_copy.copy(deep=True)                           # temp是本次的X
+            
+       
+        temp =  temp.loc[:,temp.columns != temp.columns[i]]         # 除了这列以外的数据，之后作为X
+        
+        temp_0 = SimpleImputer(missing_values=np.nan,           # 将df的数据全部用0填充
+                             strategy="constant",
+                             fill_value=0).fit_transform(temp)
+        
+        fillc = data_copy.iloc[:,i]                                  # Y
+        
+        #√print("\nfillc\n",fillc,"\ntemp_0:\n",temp_0)
+        
+        Ytrain = fillc[fillc.notnull()]                       # 在fillc列中,不为NAN的作为Y_train
+        Ytest = fillc[fillc.isnull()]                         # 在fillc列中,为NAN的作为Y_test 
+        
+        Xtrain = temp_0[Ytrain.index,:]                         # 在df_0中(已经填充了0),中那些fillc列不为NAN的行作为Xtrain
+        Xtest = temp_0[Ytest.index,:]                           # 在df_0中(已经填充了0),中那些fillc等于NAN的行作为X_test
+        rfc = RandomForestClassifier()
+        rfc.fit(Xtrain,Ytrain)
+        
+        Ypredict = rfc.predict(Xtest)                         #Ytest为了定Xtest,以最后预测出Ypredict
+    
+        #√print("\nYpredict\n",Ypredict)
+        data_copy.loc[data_copy.iloc[:,i].isnull(),data_copy.columns[i]] = Ypredict    
+    # 将data_copy中data_copy在第i列为空值的行,第i列,改成Ypredict
+    
+    return data_copy
+"""
+data是带有空缺值的数据
+alg_list是填补模型:默认knn与rfc
+knn_iteration 开启时会自动迭代Knn,找到best_k ,此选项可以提高效果，但耗费时间
+"""
+def Moon(data_orign, target,alg_list=None ,knn_iteration = False):
+    data=data_orign.copy(deep=True)
+    if(alg_list is None):
+        alg_list =[]
+        rfc = RandomForestClassifier()
+        knn = KNeighborsClassifier()
+        alg_list.append(rfc)
+        alg_list.append(knn)
+        
+    #第一个关键ds A  A[i][j][k] 代表第i个模型下 y=j 时 x的特征重要度
+    A=[]
+    
+    for i in range(0,len(alg_list)):
+        A.append([])
+        for j in range(0,len(data.columns)):
+            A[i].append([])
+            for k in range(0,len(data.columns)):
+                A[i][j].append(0)
+                
+    #第二个ds Classifier  Classifier[i][j] 代表第i个模型下 y=j时训练出的模型
+    Classifier=[]
+    for i in range(0,len(alg_list)):
+        Classifier.append([])
+        for j in range(0,len(data.columns)):
+            Classifier[i].append(0) 
+        
+    #外层循环控制算法
+    i = 0
+    for each_alg in alg_list : 
+        #内存循环控制属性
+        j=0
+        for each_col in data.columns:
+            
+            #通过完整数据获取a[i][j][j]
+            df_intact=data.loc[~data.T.isnull().any()]#有空值的列 df.isnull().any() ,有空值的列加一个T
+            #fit 
+            #在50%缺失的情况下，几乎找不到完整的行
+            if(df_intact.shape[0]<6 and isinstance(each_alg,KNeighborsClassifier)):
+                each_alg = KNeighborsClassifier(1)
+                
+            each_alg.fit(df_intact.loc[:,df_intact.columns!=each_col],df_intact[each_col].astype(int))  #如何在df中get x ,data.columns & data.index
+            alg_copy = copy.copy(each_alg)
+            
+            Classifier[i][j] = alg_copy
+            
+            #获取该属性的预测准确度
+            #有predict方法的alg:
+            if(hasattr(each_alg,'predict')):
+                #√print("df_intact",df_intact)
+                acc =metrics.accuracy_score(df_intact.loc[:,df_intact.columns==each_col].astype(int) ,
+                                            each_alg.predict(df_intact.loc[:,df_intact.columns!=each_col].astype(int)))
+            else :
+                print("no predict method ")
+                return 
+            A[i][j][j]=acc
+            #获取feature_importances_
+            feature_importances_ =[]
+            if(hasattr(each_alg,'feature_importances_')):
+                feature_importances_ = list(each_alg.feature_importances_)
+            else :
+                for index_temp in range(0,len(data.columns)-1):
+                    feature_importances_.append(1/len(data.columns))
+            #通过feature_importances_为A赋值
+            index_each_fs =0
+            for each_fs in feature_importances_:
+                #这里的逻辑是 fs的下标总是 0- n-1 ，当fs的下标与each_col相同时则不处理，否则则填充
+                if(index_each_fs != list(data.columns).index(each_col)): 
+                    A[i][j][index_each_fs] = feature_importances_[index_each_fs]
+                index_each_fs +=1
+            j+=1 
+        i+=1
+    #此时A已经获取完毕
+    #获取X0,代表不填充的性能
+    lgb = LGBMClassifier()
+    lgb.fit(data.loc[:,data.columns!=target],data.loc[:,target].astype(int))
+    X0 = lgb.score(data.loc[:,data.columns!=target],data[target].astype(int))
+    #第三个关键ds  Y[i][j]
+    Y=[]
+    for i in range(0,len(alg_list)):
+        Y.append([])
+        for j in range(0,len(data.columns)):
+            Y[i].append(0)
+    #第四个关键ds  X[i][j]
+    X=[]
+    for i in range(0,len(alg_list)):
+        X.append([])
+        for j in range(0,len(data.columns)):
+            X[i].append(0)
+            
+    #Y[i][j] 是第i个算法第j个属性的 阴差阳错率
+    for i in range(0,len(alg_list)):
+        
+        for j in range(0,len(data.columns)):
+            
+            #用有空的数据预测
+            data_copy =data.copy(deep=True)
+            
+            #data_copy非target的空值全部替换掉
+            data_copy_all = SimpleImputer(missing_values=np.nan,           # 将df的数据全部用0填充
+                         strategy="most_frequent").fit_transform(data_copy)
+            data_copy_all = pd.DataFrame(data_copy_all)
+            data_copy_all.index = data.index
+            data_copy_all.columns = data.columns
+            
+            #除了当前目标列，剩下全部单值填
+            data_copy.loc[:,data_copy.columns!=data_copy.columns[j]] = data_copy_all.loc[:,data_copy_all.columns!=data_copy_all.columns[j]]
+            #X=j列有空值的非j数据， Y=J列 。 获取当前j列的 空值预测值   
+            X_input=data_copy.loc[data_copy.T.isnull().any()]
+            X_input=X_input.loc[:,X_input.columns != X_input.columns[j]]
+            if(X_input.shape[0]!=0):
+                predict_res= Classifier[i][j].predict(X_input)
+                predict_res=pd.DataFrame(predict_res)
+                predict_res . columns = [data_copy.columns[j]]
+                predict_res.index = data_copy.loc[data_copy.T.isnull().any()].index
+                #用预测结果替换空值
+                data_copy.loc[data_copy.T.isnull().any(), data_copy.columns == data_copy.columns[j]] = predict_res  #loc里可以写两个布尔式
+            
+            #获取rate
+            data_col =data.loc[:,data.columns[j]]
+            rate=  data_col.isnull().sum() / data.shape[0]
+  
+            # X1是指新填充的数据，对于target的预测
+            X1 = lgb.score(data_copy.loc[:,data_copy.columns!=target],data_copy[target].astype(int))
+            
+            X[i][j] = X1
+            
+            Y[i][j] =  (X1 - X0) /(rate * A[i][j][j] + rate*(1-A[i][j][j]))
+            
+      #此时Y已经计算完
+    #正式进入填补过程
+    # √ print("观察此时data是否改变了，预期是不改变，通过空缺值:\n",data.isnull().sum()) 此时data未发生改变，A X  Y 等辅助变量已经处理好
+    
+    max_pos_used =[]
+    columns_used= []
+    for imp_num in range(0,len(data.columns)):
+    
+        #有序：找到本次最大X
+        max_pos =[0,0]
+        max_X=0
+        for i in range(0,len(alg_list)):
+            for j in range(0,len(data.columns)):
+                if X[i][j]>max_X:
+                    # √若当前属性已经存在，则跳过，找到下一个最大值
+                    if ( [i,j] in max_pos_used or j in columns_used):
+                        continue
+                    else:
+                        max_X = X[i][j]
+                        max_pos=[i,j]
+                        max_pos_used.append(max_pos)
+                        columns_used.append(max_pos[1])
+        #根据本次最佳提升填补数据
+        
+        #data_copy非target的空值全部替换掉
+        data_copy =data.copy(deep=True)
+        data_copy = data_copy[~data_copy.T.isna().any()]
+        
+#         data_copy = SimpleImputer(missing_values=np.nan,           # 将df的数据全部用0填充
+#                      strategy="most_frequent").fit_transform(data_copy)
+#         data_copy = pd.DataFrame(data_copy)
+#         data_copy.index = data.index
+#         #print("data_copy\n",data_copy,"data\n",data) 在第四次填补时,data_copy只有七列
+#         data_copy.columns = data.columns
+        
+        #获取含有空值的index
+        temp = data.loc[:,data.columns==data.columns[max_pos[1]]] 
+        temp = temp.loc[temp.T.isnull().any(),:]
+        null_index = temp.index
+        #√ print("null_index",null_index)
+        
+        #获取预测结果
+        if(len(null_index) !=0):
+            predict_res= Classifier[max_pos[0]][max_pos[1]].predict( data_copy.loc[null_index, data_copy.columns != data_copy.columns[max_pos[1]] ])
+            predict_res=pd.DataFrame(predict_res)
+            predict_res.index = null_index
+            predict_res.columns = [data.columns[max_pos[1]]]
+            #√print("\npredict_res\n",predict_res)
+            #填补数据 : 
+            #√print("\n空\n",data.loc[null_index,data.columns==data.columns[max_pos[1]]],"\n值\n",predict_res)
+            data.loc[null_index,data.columns==data.columns[max_pos[1]]] = predict_res
+            #√print("填补后的data",data) 
+            
+        #去掉不应该填补的部分
+        #每一个新填补的值
+        for each_row_index in null_index :
+            #满数据的acc
+            acc = A[max_pos[0]][max_pos[1]][max_pos[1]]
+            sum_feature_importance = sum(A[max_pos[0]][max_pos[1]]) - A[max_pos[0]][max_pos[1]][max_pos[1]]
+            los_feature_importance = 0
+            for j in range(0, len(data.columns)):
+                
+                #所有缺失的X都会影响到准确率
+                if(data.iloc[each_row_index,j] ==np.nan and j != max_pos[1]):
+                    los_feature_importance += A[max_pos[0]][max_pos[1]][j]
+            acc = acc * los_feature_importance / sum_feature_importance
+            
+            #if(acc + (1-acc) * Y[max_pos[0]][max_pos[1]] < 0):
+                #print("删除条件成立")
+                #data.iloc[each_row_index,max_pos[1]] = None
+        
+    return data
+"""
+knn del :
+ 不填
+ 原始填补
+ 迭代填补
+"""
+def knn_del(data,target):
+    data = data.copy(deep= True)
+    
+    #     自定义缺失率 : max(0.5, 2*miss_rate)
+    del_rate = max( 2 * sum(data.isna().sum()) / (data.shape[0] * data.shape[1]),0.5)
+    #     print("\ndel_rate\n",del_rate)
+    #     去掉行缺失率过高的数据
+    drop_index = data.loc[data.T.isnull().sum()> del_rate* len(data.columns)].index
+    data.drop( drop_index ,inplace=True)
+    #     √
+    #     获取空值的位置信息 null_pos[i][j] i 是列下标,j是行索引
+    null_pos =[]
+    for each_col in data.columns:
+        temp = data[each_col]
+        null_pos.append(temp.loc[temp.isnull()].index) #Serise也可以用Loc
+    #      print(null_pos)
+    #     原始填补df_imp ， 保证下限
+    
+    knn = KNNImputer(n_neighbors=5)
+    data_imp = pd.DataFrame(knn.fit_transform(data))
+    data_imp.columns = data.columns
+    data_imp.index = data.index
+    
+    
+    #尝试用df_imp再去填补，获取X1_max，迭代
+    return data_imp
+"""
+实验Knn 及 Knn_it
+"""
+warnings.simplefilter("ignore")
+score_summary = pd.DataFrame([np.zeros(6),np.zeros(6),np.zeros(6)],columns=['knn','rfc','bayes','NCA','BEST','Complex'])
+ce_summary = []
+target='quality'
+X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+Y_test = df.loc[~df.T.isna().any(),target]
+time_use = []
+for n in range(0,1):
+    i=0
+    for each_df in df_miss_list[n]:
+        Xt=miss_indicator.fit_transform(each_df)
+        X0 = each_df.copy(deep=True)
+        X0.iloc[0:X0.shape[0],:] = k_imp.fit_transform(X0)
+        dt.fit(X0.loc[:,X0.columns!=target],X0.loc[:,target].astype(int))
+        score_summary.loc[i,'knn'] += dt.score(X_test,Y_test.astype(int))
+        
+        X1 = each_df.copy(deep=True)
+        X1.iloc[0:X1.shape[0],:] = d_imp.fit_transform(X1)
+        dt.fit(X1.loc[:,X1.columns!=target],X1.loc[:,target].astype(int))
+        score_summary.loc[i,'rfc'] += dt.score(X_test,Y_test.astype(int))
+        
+        X2 = each_df.copy(deep=True)
+        X2.iloc[0:X2.shape[0],:] = b_imp.fit_transform(X2)
+        dt.fit(X2.loc[:,X2.columns!=target],X2.loc[:,target].astype(int))
+        score_summary.loc[i,'bayes'] += dt.score(X_test,Y_test.astype(int))
+        #修改区
+        X0 =reduction_data_type(df,X0)
+        X1 =reduction_data_type(df,X1)
+        X2 =reduction_data_type(df,X2)
+        
+        #IT
+        loss_list=cross_loss([X0,X1,X2],target) #计算ce值
+        mean_ce = [np.mean(j) for j in loss_list]
+        print(mean_ce)
+        #找到最小mean，训练tree
+        _min_index=mean_ce.index(min(mean_ce))
+        _X_list=[X0,X1,X2]
+        dtce.fit(_X_list[_min_index],loss_list[_min_index])#训练ce树
+        #对于每个结果，找到ce最小值
+        res = select(_X_list,dtce)
+        
+        dt.fit(res.loc[:,res.columns!=target],res.loc[:,target].astype(int))
+        score_summary.loc[i,'BEST'] += dt.score(X_test,Y_test.astype(int))
+        
+        i+=1
+    
+print(score_summary)
+def cross_loss(data,target):
+    #导包与初始化
+    from sklearn.model_selection import RepeatedStratifiedKFold
+    from sklearn.metrics import log_loss
+    from sklearn.preprocessing import  OneHotEncoder
+    rskf = RepeatedStratifiedKFold(n_splits=10, n_repeats=5, random_state=0)
+    dt = DecisionTreeClassifier()
+    onehotencoder = OneHotEncoder( )
+    #x是target的one-hot-coder
+    x=onehotencoder.fit_transform(np.array(data[target]).reshape(-1,1)).toarray() 
+    #loss_score用来存储每个样本的损失值
+    loss_score=[0]*len(data)
+    for train_index, test_index in rskf.split(data.loc[:,data.columns!=target],data[target]):
+        
+        train_X = data.loc[:,data.columns!=target].iloc[train_index]
+        train_Y = data.loc[:,data.columns==target].iloc[train_index]
+        test_X = data.loc[:,data.columns!=target].iloc[test_index]
+        test_Y = data.loc[:,data.columns==target].iloc[test_index]
+        
+        dt.fit(train_X,train_Y)
+        
+        y_pred = dt.predict_proba(test_X) #y_pred 是predict的one-hot-coder
+        
+        for i in range(0,len(y_pred)):
+            ce=log_loss(x[test_index[i]],y_pred[i])
+            loss_score[test_index[i]] += ce
+   
+    return loss_score
+def main_replace(data_list,loss_list):
+      #寻找主结果
+    loss_stan = []
+    for loss in loss_list:
+        maxloss=max(loss)
+        minloss=min(loss)
+        loss_stan.append([(i-minloss)/(maxloss-minloss) for i in loss])
+    mean_ce=[np.mean(i) for i in loss_list]
+    best_index= mean_ce.index(min(mean_ce))
+    #替换主结果
+    res=data_list[best_index].copy(deep=True)
+    #替换规则是相对变化大于50%
+    for i in range(0,len(loss_list[0])): #i是结果中的行号
+        best=loss_stan[best_index][i]
+        for j in range(0,len(loss_list)):  #j代表第几个结果
+            if(loss_stan[j][i]/best<0.8): #如果最佳结果/主结果  
+                res.iloc[i,:]=data_list[j].iloc[i,:]
+                best=loss_stan[j][i]
+    return res
+def complex_control(res_nca,res_mr,loss_list):
+    res=res_mr.copy(deep=True)
+    mean=[np.mean(i) for i in loss_list]
+    for i in range(0,len(loss_list[0])):#行号
+        flag=0
+        for j in range(0,len(loss_list)):#结果下标
+            if(loss_list[j][i]>mean[j]):
+                flag+=1
+        if(flag==3):#均高的情况
+            res.iloc[i,:]=res_nca.iloc[i,:]
+    return res
+def calculate_p(data,target,miss_matrix):
+     #导包与初始化
+    from sklearn.model_selection import RepeatedStratifiedKFold
+    from sklearn.metrics import log_loss
+    from sklearn.preprocessing import  OneHotEncoder
+    import numpy as np
+    from sklearn.mixture import GaussianMixture
+    rskf = RepeatedStratifiedKFold(n_splits=5, n_repeats=2, random_state=0)
+    dt = DecisionTreeClassifier()
+    onehotencoder = OneHotEncoder( )
+    #x是target的one-hot-coder
+    x=onehotencoder.fit_transform(np.array(data[target]).reshape(-1,1)).toarray() 
+    #loss_score用来存储每个样本的损失值
+    score=[0]*len(data)
+    for train_index, test_index in rskf.split(data.loc[:,data.columns!=target],data[target]):
+        train_X = data.loc[:,data.columns!=target].iloc[train_index]
+        train_Y = data.loc[:,data.columns==target].iloc[train_index]
+        test_X = data.loc[:,data.columns!=target].iloc[test_index]
+        test_Y = data.loc[:,data.columns==target].iloc[test_index]
+        
+        dt.fit(train_X,train_Y)
+        y_pred = dt.predict_proba(test_X) #y_pred 是predict的one-hot-coder
+        
+        for i in range(0,len(y_pred)):
+            ce=log_loss(x[test_index[i]],y_pred[i])
+            score[test_index[i]] += ce
+    #GMM聚类
+    gm = GaussianMixture(n_components=2, random_state=0).fit(np.array(score).reshape(-1,1))
+    clu_type=gm.predict(np.array(score).reshape(-1,1))
+    #记录0类的平均值和索引
+    type_0_index=[]
+    sum_0_score=0
+    for i in range(0,len(score)):
+        if(clu_type[i]==0):
+            type_0_index.append(i)
+            sum_0_score += score[i]
+    flag_0 = True
+    if(sum_0_score/len(type_0_index)>np.mean(score)): #0类均值大于总体均值，说明0类是错误类
+        flag_0 = False
+    proba= gm.predict_proba(np.array(score).reshape(-1,1))
+    if(flag_0):
+        res = [i[0] for i in proba]
+    else:
+        res = [i[1] for i in proba]
+#     M=data.shape[1]
+#     for i in range(0,len(miss_matrix)):
+#         res[i] =  (miss_matrix[i].sum()/M  + res[i])/2
+    return res,score
+        def drop_wrost(data,score):
+    #3取1
+    space = int((data.shape[0]+1)/3)
+    index=[]
+    for i in range(0,space):
+        min_pos=0
+        min_value=np.inf
+        for j in range(0,3):
+            if(score[j*space+i]<min_value):
+                min_pos=j*space+i
+                min_value = score[j*space+i]
+        index.append(min_pos)
+    print(index)
+    return data.iloc[index,:]
+"""
+Table1:三种策略 最佳k，有序，融合
+6种方法的最终结果
+"""
+warnings.simplefilter("ignore")
+score_summary = pd.DataFrame([np.zeros(6),np.zeros(6),np.zeros(6)],columns=['knn','rfc','bayes','NCA','MR','Complex'])
+ce_summary = []
+X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+Y_test = df.loc[~df.T.isna().any(),target]
+time_use = []
+for n in range(0,5):
+    i=0
+    for each_df in df_miss_list[n]:
+        Xt=miss_indicator.fit_transform(each_df)
+        X0 = each_df.copy(deep=True)
+        X0.iloc[0:X0.shape[0],:] = k_imp.fit_transform(X0)
+        dt.fit(X0.loc[:,X0.columns!=target],X0.loc[:,target].astype(int))
+        score_summary.loc[i,'knn'] += dt.score(X_test,Y_test.astype(int))
+        
+        X1 = each_df.copy(deep=True)
+        X1.iloc[0:X1.shape[0],:] = d_imp.fit_transform(X1)
+        dt.fit(X1.loc[:,X1.columns!=target],X1.loc[:,target].astype(int))
+        score_summary.loc[i,'rfc'] += dt.score(X_test,Y_test.astype(int))
+        
+        X2 = each_df.copy(deep=True)
+        X2.iloc[0:X2.shape[0],:] = b_imp.fit_transform(X2)
+        dt.fit(X2.loc[:,X2.columns!=target],X2.loc[:,target].astype(int))
+        score_summary.loc[i,'bayes'] += dt.score(X_test,Y_test.astype(int))
+        #修改区
+        X0 =reduction_data_type(df,X0)
+        X1 =reduction_data_type(df,X1)
+        X2 =reduction_data_type(df,X2)
+         
+        #NCA均值\众数融合
+        res_nca = NCA([X0,X1,X2],Xt)
+        dt.fit(res_nca.loc[:,res_nca.columns!=target],res_nca.loc[:,target].astype(int))
+        score_summary.loc[i,'NCA'] += dt.score(X_test,Y_test.astype(int))
+        #MR
+        loss_list=cross_loss([X0,X1,X2],target)
+        res=main_replace([X0,X1,X2],loss_list)
+        dt.fit(res.loc[:,res.columns!=target],res.loc[:,target].astype(int))
+        score = dt.score(X_test,Y_test.astype(int))
+        score_summary.loc[i,'MR'] += score
+        #Complex
+        res=complex_control(res_nca,res,loss_list)
+        dt.fit(res.loc[:,res.columns!=target],res.loc[:,target].astype(int))
+        score = dt.score(X_test,Y_test.astype(int))
+        score_summary.loc[i,'Complex'] += score
+ 
+        i+=1
+score_summary *=20
+size_summary/=5
+print(score_summary)
+print(size_summary)
+def WA(data_list,miss_matrix,max_Class=20,fuction='pline'):
+    if(len(data_list)<2):
+        print("输入数据个数不足")
+        return 
+    #生成各属性的区间
+    col_range=[]
+    for col in  data_list[0].columns:
+        lower_limit = np.inf
+        upper_limit = -np.inf
+        for X in data_list: #X是其中一份填补数据
+            if(len(X[col].value_counts())<max_Class):
+                lower_limit  =0 
+                upper_limit = len(X[col].value_counts())
+            else:
+                lower_limit = min(min(X[col]),lower_limit)
+                upper_limit = max(max(X[col]),upper_limit)
+        col_range.append([lower_limit,upper_limit])
+#     print(col_range)
+    #融合后返回的权值，长度等于融合后的数据，完整数据的权重为1，填补数据为 Sum(-log(n/N))
+    weighted=[]
+    for row_index in range(X.shape[0]): #按行遍历
+        #获取数值型变量的weighte
+        if(~miss_matrix[row_index].any()): #完整样本权重为1
+            weighted.append(1)
+            continue
+        row = miss_matrix[row_index]
+        miss_col_index = np.where(row>0)[0] #获取空值下标
+        weighted_this_row= 0
+        if(fuction=='r'):
+            weighted_this_row = 1-  (len(miss_col_index) / X.shape[1]) 
+        if(fuction=='pline' or fuction=='pcurve1' or fuction=='pcurve2'):
+            for col_index in  miss_col_index: #按列遍历
+                N = col_range[col_index][1] -col_range[col_index][0]
+                Mi_value =[] #该缺失值的m个填补数据
+                for each_data in data_list:
+                    Mi_value.append(each_data.iloc[row_index,col_index])
+                if( len(each_data.iloc[:,col_index].value_counts()) > max_Class):
+                    x =  (max(Mi_value)-min(Mi_value)) /N
+                else:
+                    x = (len(set(Mi_value))-1)/N
+                weighted_this_row += x  
+    #             print('\nweighted_this_row',weighted_this_row,'x ',x,'N ',N)
+            d = weighted_this_row
+#         /len(miss_col_index)
+            if(fuction=='pline'):
+                weighted_this_row =  math.exp(-d)
+            elif(fuction=='pcurve1'):
+                weighted_this_row = d**2 - (5/3)*d +1 
+            elif(fuction=='pcurve1'):
+                weighted_this_row = -d**2 + (1/3)*d + 1
+            
+        weighted.append(weighted_this_row)
+    merge_data = pd.concat(data_list,axis=0)
+    weighted_all =[]
+    for i in range(len(data_list)):
+        weighted_all += weighted
+#     minV=min(weighted_all)
+#     meanV=np.mean(weighted_all)
+#     dert = max(weighted_all)- min(weighted_all)
+#     sort_weight = np.sort(weighted_all)
+#     lenV=len(weighted_all)
+    
+    return merge_data,weighted_all
+def NCA(data_list,miss_matrix,maxClass=20):
+    X=data_list[0].copy(deep=True)
+    vote=False
+    for col_index in range(0,X.shape[1]):
+        if(len(X.iloc[:,col_index].value_counts())<maxClass):#是离散属性
+            vote=True
+        for row_index in range(0,X.shape[0]):
+            if(~miss_matrix[row_index,col_index]): #完整样本不动
+                continue
+            Mi_value = []
+            for each in data_list:
+                Mi_value.append(each.iloc[row_index,col_index])
+            if(vote):
+                X.iloc[row_index,col_index] = max(set(Mi_value),key=Mi_value.count) #求众数
+            else:
+                X.iloc[row_index,col_index] = sum(Mi_value)/len(Mi_value)
+    return X """小于b值删除"""
+def DA(data,weighted,b=0.1):
+    save_index=[]
+    new_weighted=[]
+    for i in range(0,len(weighted)):
+        if(weighted[i]>b):
+            save_index.append(i)
+            new_weighted.append(weighted[i])
+    return data.iloc[save_index,:],new_weighted
+"""大于a值合并"""
+def MA(data,weighted,a=0.95):
+    res =pd.DataFrame(columns=data.columns)
+    new_weighted=[]
+    len_df = int(data.shape[0] /3 )
+    for i in range(0,len_df):
+        if(weighted[i]>=a):
+            res=res.append(data.iloc[i,:])
+            new_weighted.append(weighted[i]*3)
+        else:
+            res=res.append(data.iloc[[i,i+len_df,i+2*len_df],:])
+            new_weighted.extend([weighted[i],weighted[i],weighted[i]])
+    return res,new_weighted
+import matplotlib.pyplot as plt
+def WAI(data_list,miss_matrix,a=0.95,b=0.1):
+    res,weighted =WA(data_list,miss_matrix)
+    res,weighted = DA(res,weighted,b)
+    res,weighted = MA(res,weighted,a)
+    return res,weighted
+def sampling(weight):
+    index=[]
+    for i in range(0,len(weight)):
+        if(random.random()<weight[i]):
+            index.append(i)
+    return index
+            
+def droping(weight):
+    #每三个一循环，三取中
+    index=[]
+    for i in range(0,len(weight),3):
+        temp = weight[i:i+3]
+        temp.remove(max(temp))
+        temp.remove(min(temp))
+        index.append(weight[i:i+3].index(temp[0])+i)
+    return index
+            
+def ycyc_rate(data,target,clas=True):
+    if(clas):
+        dt = DecisionTreeClassifier()
+    else:
+        from sklearn.metrics import median_absolute_error
+        dt = DecisionTreeRegressor()
+    dt.fit(data.loc[:,data.columns!=target],data[target])
+    if(clas==False):
+        res=dt.predict(data.loc[:,data.columns!=target])
+        mae=median_absolute_error(res,data[target])
+    rate=[]
+    for col_index in data.columns:
+        #获取该列数据
+        value = data[col_index]
+        #每个数据随机转换为不为自己的数据
+        new_value=[]
+        for i in range(0,data.shape[0]):
+            value_set=set(value)
+            value_set.remove(value[i])
+            new_value.append(list(value_set)[np.random.randint(0,len(value_set))])
+        #获取预测结果
+        temp = data.copy(deep=True)
+        temp[col_index]=new_value
+        predict_res=dt.predict(temp.loc[:,temp.columns!=target])
+        #计算正确率
+        count =0
+        for i in range(0,data.shape[1]):
+            if(clas==True):
+                if(predict_res[i]==temp.iloc[i,:].loc[target]):
+                    count += 1
+            elif(np.abs(predict_res[i] - temp.iloc[i,:].loc[target])<mae):
+                count +=1
+        rate.append(count/data.shape[0])
+    return rate
+def WA(data_list,miss_matrix,max_Class=20,fuction='pline'):
+    if(len(data_list)<2):
+        print("输入数据个数不足")
+        return 
+    ycyc = ycyc_rate(data_list[0],target,clas=True)
+    #生成各属性的区间 col_range
+    col_range=[]
+    for col in  data_list[0].columns:
+        lower_limit = np.inf
+        upper_limit = -np.inf
+        for X in data_list: #X是其中一份填补数据
+            if(len(X[col].value_counts())<max_Class):
+                lower_limit  =0 
+                upper_limit = len(X[col].value_counts())
+            else:
+                lower_limit = min(min(X[col]),lower_limit)
+                upper_limit = max(max(X[col]),upper_limit)
+        col_range.append([lower_limit,upper_limit])
+    proba=[]
+    for row_index in range(X.shape[0]): #按行遍历
+        proba_this_row_reflect= [0]*len(data_list)
+        if(~miss_matrix[row_index].any()): #完整样本权重为1
+            proba.extend([1]*len(data_list))
+            continue
+        row = miss_matrix[row_index]
+        miss_col_index = np.where(row>0)[0] #获取空值下标
+        if(fuction=='r'):
+            x= 1-  (len(miss_col_index) / X.shape[1]) 
+            proba_this_row_reflect=[x] * len(data_list)
+        if(fuction=='pline'):
+            for col_index in  miss_col_index: #按列遍历
+                N = col_range[col_index][1] -col_range[col_index][0]
+                Mi_value =[] #该缺失值的m个填补数据
+                for each_data in data_list:
+                    Mi_value.append(each_data.iloc[row_index,col_index])             
+                for each_proba_index in range(0,len(data_list)):
+                    if( len(each_data.iloc[:,col_index].value_counts()) > max_Class):#连续属性
+                        mean_Value = (sum(Mi_value) - Mi_value[each_proba_index])/(len(Mi_value)-1)
+                        x= np.abs(Mi_value[each_proba_index]-mean_Value) / N
+                        x=x+(1-x)*ycyc[col_index]
+                        proba_this_row_reflect[each_proba_index]+=x
+                    else:#离散属性
+                        different_Count = 0
+                        for dispeard_imp_data in Mi_value:
+                            if(Mi_value[each_proba_index] ==dispeard_imp_data):
+                                different_Count +=1
+                        x = (different_Count-1)/N
+                        x=x+(1-x)*ycyc[col_index]
+                        proba_this_row_reflect[each_proba_index]+=x
+            proba_this_row_reflect =  [np.exp(-i) for i in proba_this_row_reflect]       
+        proba.extend(proba_this_row_reflect)
+    merge_data = pd.concat(data_list,axis=0)
+    merge_data['index'] = merge_data.index
+    merge_data.sort_values(by='index',inplace=True)
+   
+    return merge_data.loc[:,merge_data.columns!='index'],proba
+def union_res(data_list,target):
+    dt_list=[]
+    #建立n个模型
+    for i  in range(0,len(data_list)):
+        data=data_list[i]
+        dt = DecisionTreeClassifier()
+        dt.fit(data.loc[:,data.columns!=target],data[target])
+        dt_list.append(dt)
+    #对每个结果筛选
+    res=copy.deepcopy(data_list)
+    for i in range(0,len(data_list)):
+        save_index =[]
+        data=data_list[i]
+        for dt in dt_list:
+            predict_res= dt.predict(data.loc[:,data.columns!=target])
+            for j in range(0,data.shape[0]):
+                if(predict_res[j] == data[target].iloc[j]):
+                    save_index.append(j)
+        data=res[i]
+        save_index=list(set(save_index))
+        res[i] = data.iloc[save_index,:]
+    return pd.concat(res,axis=0)
+                
+def ifselect(data_list):
+    from sklearn.ensemble import IsolationForest
+    ift=IsolationForest(random_state=0)
+    X=pd.concat(data_list,axis=0)
+    ift.fit(X)
+    res = ift.predict(X)
+    save_index = []
+    for j in range(0,len(res)):
+        if(res[j]>0):
+            save_index.append(j)
+    return X.iloc[save_index,:]
+def cl_select(data,score):
+    data = data.copy(deep=True)
+    data['score']=score
+    data.sort_values(by='score',inplace=True)
+    data=data.loc[(data['score']==0 )|(data['score']==1)]
+    return data.loc[:,data.columns!='score']
+    
+"每个缺失率生成2分数据，后续取平均"
+warnings.simplefilter("ignore")
+target='mpg'
+df_miss_list =[]
+for n in range(0,5):
+    df_miss_list.append([])
+    for i in [0.1,0.3,0.5]:
+        df_miss=missing_at_random(dt=df,rate=i,target=target)
+        df_miss_list[n].append(df_miss)
+dt = DecisionTreeClassifier(criterion='gini',
+                            splitter='best',#划分策略，有best和Random
+                            min_samples_split= 2 ,#拆分的最小值
+                            min_samples_leaf = 1, #叶节点最小值
+                            #min_weight_fraction_leaf 不提供则视为等权
+                            max_features =None,# 参考的特征，None为全体
+                            random_state=0
+                           )
+k_imp =KNNImputer()
+b_imp =IterativeImputer(estimator=BayesianRidge(),
+                                 missing_values=np.nan, 
+                                 sample_posterior=False,  #是否高斯采样
+                                 max_iter=5, #迭代的轮数
+                                 tol=0.001, #迭代早期停止条件
+                                 n_nearest_features=None, #使用全部特征
+                                 initial_strategy='mean',#初始填补策略
+                                 imputation_order='roman',#迭代顺序
+                                 skip_complete =True, #??
+                                 #min_value,max_value #最大最小补插值
+                                 #verbose #调试信息设置
+                                 random_state = 0
+                                )
+d_imp =IterativeImputer(estimator=DecisionTreeRegressor(random_state=20220325),
+                                 missing_values=np.nan, 
+                                 sample_posterior=False,  #是否高斯采样
+                                 max_iter=5, #迭代的轮数
+                                 tol=0.001, #迭代早期停止条件
+                                 n_nearest_features=None, #使用全部特征
+                                 initial_strategy='mean',#初始填补策略
+                                 imputation_order='roman',#迭代顺序
+                                 skip_complete =True, #??
+                                 #min_value,max_value #最大最小补插值
+                                 #verbose #调试信息设置
+                                 random_state = 0
+                                )
+miss_indicator = MissingIndicator()
+"""
+Table1:三种策略 最佳k，有序，融合
+6种方法的最终结果
+"""
+warnings.simplefilter("ignore")
+target='quality'
+score_summary = pd.DataFrame([np.zeros(7),np.zeros(7),np.zeros(7)],columns=['knn','rfc','bayes','NA','NCA','WRA','WLA'])
+size_summary = pd.DataFrame([np.zeros(2),np.zeros(2),np.zeros(2)],columns=['NA','WLA'])
+distance_summary = []
+X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+Y_test = df.loc[~df.T.isna().any(),target]
+time_use = []
+for n in range(0,1):
+    i=0
+    for each_df in df_miss_list[n]:
+        Xt=miss_indicator.fit_transform(each_df)
+        X0 = each_df.copy(deep=True)
+        X0.iloc[0:X0.shape[0],:] = k_imp.fit_transform(X0)
+        dt.fit(X0.loc[:,X0.columns!=target],X0.loc[:,target].astype(int))
+        score_summary.loc[i,'knn'] += dt.score(X_test,Y_test.astype(int))
+        
+        X1 = each_df.copy(deep=True)
+        X1.iloc[0:X1.shape[0],:] = d_imp.fit_transform(X1)
+        dt.fit(X1.loc[:,X1.columns!=target],X1.loc[:,target].astype(int))
+        score_summary.loc[i,'rfc'] += dt.score(X_test,Y_test.astype(int))
+        
+        X2 = each_df.copy(deep=True)
+        X2.iloc[0:X2.shape[0],:] = b_imp.fit_transform(X2)
+        dt.fit(X2.loc[:,X2.columns!=target],X2.loc[:,target].astype(int))
+        score_summary.loc[i,'bayes'] += dt.score(X_test,Y_test.astype(int))
+        #修改区
+        X0 =reduction_data_type(df,X0)
+        X1 =reduction_data_type(df,X1)
+        X2 =reduction_data_type(df,X2)
+         
+        #2022年5月8日02:10:54
+        
+        res = NA([X0,X1,X2])
+        dt.fit(res.loc[:,res.columns!=target],res.loc[:,target].astype(int))
+        score_summary.loc[i,'NA'] += dt.score(X_test,Y_test.astype(int))
+        size_summary.loc[i,'NA'] += res.shape[0]
+        
+        res = NCA([X0,X1,X2],Xt)
+        dt.fit(res.loc[:,res.columns!=target],res.loc[:,target].astype(int))
+        score_summary.loc[i,'NCA'] += dt.score(X_test,Y_test.astype(int))
+        
+#         res,weighted = WA([X0,X1,X2],Xt,fuction='r')
+#         index=sampling(weighted)
+#         res=res.iloc[index,:]
+#         dt.fit(res.loc[:,res.columns!=target],res.loc[:,target].astype(int))
+#         score_summary.loc[i,'WRA'] += dt.score(X_test,Y_test.astype(int))
+        
+        res,distance=WA([X0,X1,X2],Xt)
+        dt.fit(res.loc[:,res.columns!=target],res.loc[:,target].astype(int))
+        score = dt.score(X_test,Y_test.astype(int))
+        score_summary.loc[i,'WLA'] += score
+        size_summary.loc[i,'WLA'] += res.shape[0]
+        
+        #将distance区分出对错
+        dt.fit(X_test,Y_test.astype(int))
+        predict = dt.predict(res.loc[:,res.columns!=target])
+        right_distance=[]
+        wrong_distance=[]
+        for j in range(0,len(predict)):
+            if(res[target].iloc[j]==predict[j]):
+                right_distance.append(distance[j])
+            else:
+                wrong_distance.append(distance[j])
+        distance_summary.append(right_distance)
+        distance_summary.append(wrong_distance)
+        i+=1
+score_summary *=20
+size_summary/=5
+print(score_summary)
+print(size_summary)
+def moon(data,target,threshold):
+    #     删除
+    data = data.copy(deep= True)
+    
+    #     自定义缺失率 : max(0.5, 2*miss_rate)
+    del_rate = max( 2 * sum(data.isna().sum()) / (data.shape[0] * data.shape[1]),0.5)
+    #     print("\ndel_rate\n",del_rate)
+    #     去掉行缺失率过高的数据
+    drop_index = data.loc[data.T.isnull().sum()> del_rate* len(data.columns)].index
+    data.drop( drop_index ,inplace=True)
+    
+    data.reset_index(inplace=True)
+    data.drop(columns=['index'],axis=1,inplace=True)
+    
+    "两个基础"
+    knn_imputer =  KNNImputer(n_neighbors=5)
+    data_knn = pd.DataFrame(knn_imputer.fit_transform(data))
+    data_knn.columns = data.columns
+    data_knn.index = data.index
+    "POINT"
+    #print("data_rfc",data_rfc,"data_knn",data_knn) #发现填补后的数据带index
+    
+    
+    #     获取空值的位置信息 null_pos[i][j] i 是列下标,j是行索引
+    null_pos =[]
+    for each_col in data.columns:
+        temp = data[each_col]
+        null_pos.append(temp.loc[temp.isnull()].index) #Serise也可以用Loc
+    "初始填补使用Knn"
+    #     X0是本次迭代前的值
+    lgb = LGBMClassifier()
+    X_train = data_knn.loc[:,data_knn.columns!=target] 
+    Y_train = data_knn.loc[:,data_knn.columns==target] 
+    X_test = data.loc[~data.T.isna().any(),data.columns!=target]
+    Y_test = data.loc[~data.T.isna().any(),data.columns==target] 
+    lgb.fit(X_train,Y_train.astype(int))
+    X0_knn=lgb.score(X_test,Y_test.astype(int))
+    data_imp = data_knn.copy(deep=True)
+    #     √print("data_imp",data_imp)
+    "进入迭代填补"
+    columns_used=[]
+    columns_iter = list(data_imp.columns)
+    columns_iter .remove(target)
+    for each_col in columns_iter:
+        #     X0是本次迭代前的值
+        lgb = LGBMClassifier()
+        X_train = data_imp.loc[:,data_imp.columns!=target] 
+        Y_train = data_imp.loc[:,data_imp.columns==target] 
+        X_test = data.loc[~data.T.isna().any(),data.columns!=target]
+        Y_test = data.loc[~data.T.isna().any(),data.columns==target] 
+        lgb.fit(X_train,Y_train.astype(int))
+        X0=lgb.score(X_test,Y_test.astype(int))
+        
+        #     计算knn的ACC_Max ，不考虑已经填充过的
+        use_knn = True
+        acc_max = 0
+        best_col=''
+        X_train = data_imp.loc[:,data_imp.columns!=each_col] 
+        Y_train = data_imp.loc[:,data_imp.columns==each_col] 
+        X_test = data.loc[~data.T.isna().any(),data.columns!=each_col]
+        Y_test = data.loc[~data.T.isna().any(),data.columns==each_col] 
+        
+        knn_clas =KNeighborsClassifier()
+        knn_clas.fit(X_train,Y_train.astype(int))
+        acc = knn_clas.score(X_test,Y_test.astype(int))
+        if(acc>acc_max):
+            acc_max=acc
+            best_col=each_col
+                
+        #       计算rfc的ACC_Max
+        X_train = data_imp.loc[:,data_imp.columns!=each_col] 
+        Y_train = data_imp.loc[:,data_imp.columns==each_col] 
+        rfc_clas = RandomForestClassifier()
+        rfc_clas.fit(X_train,Y_train.astype(int))
+        acc = rfc_clas.score(X_test,Y_test.astype(int))
+            
+        if(acc>acc_max):
+            acc_max=acc
+            best_col=each_col
+            use_knn = False
+                
+        if(acc_max <0.5):
+            return data_imp
+        
+        columns_used.append(best_col)
+        "POINT"
+        #         print("best_col",best_col,"use_knn",use_knn)
+        #         print("data_imp",data_imp)
+        #         print("acc_max",acc_max)
+        "选择模型，预测，测算X1,不降则替换掉原先的空值部分"
+        if(use_knn):
+            Y_predict = knn_clas.predict(X_train)
+        else:
+            Y_predict = rfc_clas.predict(X_train)
+            
+        j = list(data_imp.columns).index(best_col)        
+        null_index =null_pos[j]             
+        
+        data_imp_iter = data_imp.copy(deep=True)
+        #         print("data_imp_iter.index",data_imp_iter.index,"null_index",null_index)
+        data_imp_iter.loc[null_index,data_imp_iter.columns[j]] = Y_predict[null_index]
+        
+        #         3.添补完成，计算X1
+        X_train = data_imp_iter.loc[:,data_imp_iter.columns!=target] 
+        Y_train = data_imp_iter.loc[:,data_imp_iter.columns==target] 
+        X_test = data.loc[~data.T.isna().any(),data.columns!=target]
+        Y_test = data.loc[~data.T.isna().any(),data.columns==target] 
+        lgb.fit(X_train,Y_train.astype(int))
+        X1=lgb.score(X_test,Y_test.astype(int))
+        
+        #        如果X1下降，终止迭代，返回data_imp
+        if(X1<X0+threshold):
+            return data_imp
+        #         否则迭代完成，进入下次循环
+        data_imp[best_col] = data_imp_iter[best_col]
+        "POINT"
+        #         print("X0:",X0,"X1:",X1)
+         
+    return data_imp
+def imp_rfc(data,target=None):
+    data_copy = data.copy(deep=True)
+    
+    #默认情况是全部填补 ,sindex 是属性小标的集合，按照集合顺序填补
+    if(target==None):
+        sindex = np.argsort(data_copy.isna().sum().values.tolist()) #将有缺失值的列按缺失值的多少由小到大
+    
+    #特殊情况是填补一列 ，sindex只包含一个值
+    else :
+        sindex = list(data.columns).index(target)
+        sindex_temp = []
+        sindex_temp.append(sindex)
+        sindex = sindex_temp
+        
+    # 进入for循环进行空值填补
+    for i in sindex:              #i是要填补的列的下标         
+         
+        if data_copy.iloc[:,i].isna().sum() == 0:             # 将没有空值的行过滤掉
+            continue                                          # 直接跳过当前的for循环
+            
+        temp = data_copy.copy(deep=True)                           # temp是本次的X
+            
+       
+        temp =  temp.loc[:,temp.columns != temp.columns[i]]         # 除了这列以外的数据，之后作为X
+        
+        temp_0 = SimpleImputer(missing_values=np.nan,           # 将df的数据全部用0填充
+                             strategy="constant",
+                             fill_value=0).fit_transform(temp)
+        
+        fillc = data_copy.iloc[:,i]                                  # Y
+        
+        #√print("\nfillc\n",fillc,"\ntemp_0:\n",temp_0)
+        
+        Ytrain = fillc[fillc.notnull()]                       # 在fillc列中,不为NAN的作为Y_train
+        Ytest = fillc[fillc.isnull()]                         # 在fillc列中,为NAN的作为Y_test 
+        
+        Xtrain = temp_0[Ytrain.index,:]                         # 在df_0中(已经填充了0),中那些fillc列不为NAN的行作为Xtrain
+        Xtest = temp_0[Ytest.index,:]                           # 在df_0中(已经填充了0),中那些fillc等于NAN的行作为X_test
+        rfc = RandomForestClassifier()
+        rfc.fit(Xtrain,Ytrain)
+        
+        Ypredict = rfc.predict(Xtest)                         #Ytest为了定Xtest,以最后预测出Ypredict
+    
+        #√print("\nYpredict\n",Ypredict)
+        data_copy.loc[data_copy.iloc[:,i].isnull(),data_copy.columns[i]] = Ypredict    
+    # 将data_copy中data_copy在第i列为空值的行,第i列,改成Ypredict
+    
+    return data_copy
+"""
+数据离散化
+"""
+def dispeard(data,col_dis,sep_num):
+    data_ret = data.copy(deep=True)
+    j=0
+    for each in col_dis:
+        if(each == 0):
+            j+=1
+            continue
+        k = sep_num[j]  #k值为组数
+        data_ret.iloc[:,j] = pd.cut(data.iloc[:,0],k,labels=range(k))   #将集合分组
+        
+        data_ret.iloc[:,j]= data_ret.iloc[:,j].astype(int)
+        j+=1
+    return data_ret
+"""根据最佳k值填补"""
+def knn_best_imp(data):
+    data = data .copy(deep=True)
+    data_imp = data.copy(deep=True)
+    def get_best_k(data,k_min=1,k_max=20):
+        data=data.copy(deep=True)
+        best_k_list =[]
+        index_col = 0
+        for col in data.columns:
+            best_k = 0
+            best_score = np.inf
+            X=data[col]
+            intact = X[~X.isna()].index
+            if(len(intact)==data.shape[0]):
+                best_k_list.append(0)
+                continue
+            X=data.loc[intact,data.columns!=col]
+            y=data.loc[intact,data.columns==col]
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33, random_state=42)   
+            X= pd.concat([X_train,y_train],axis=1)
+            Y = pd.concat([X_test,y_test],axis=1)
+            Y[col]=None  
+            is_dispeard_col = True
+            if(len(data[col].value_counts())>20):
+                is_dispeard_col = False
+            for i in range(k_min,k_max):
+                knn_imp= KNNImputer(n_neighbors=i)
+                knn_imp.fit(X)
+                if(is_dispeard_col):
+                    score = 1 - metrics.accuracy_score(knn_imp.transform(Y)[:,Y.shape[1]-1].astype(int),y_test)
+                else:
+                    score = metrics.mean_squared_error(knn_imp.transform(Y)[:,Y.shape[1]-1],y_test)
+                if(score<best_score):
+                    best_score = score
+                    best_k = i
+            best_k_list.append(best_k)
+            index_col +=1
+        return best_k_list
+    best_k_list = get_best_k(data)
+    for i in range(0,len(best_k_list)):
+        k =best_k_list[i]
+        if(k==0):
+            continue
+        knn_imp= KNNImputer(n_neighbors=k)
+        data_imp.iloc[:,i] = knn_imp.fit_transform(data)[:,i] #这里如果引入迭代，效果不明显
+    return data_imp
+df = pd.read_csv(wine_path)
+df.reset_index(drop=True,inplace=True)
+target='quality'
+warnings.simplefilter("ignore")
+df_miss_list =[]
+for n in range(0,5):
+    df_miss_list.append([])
+    for i in [0.1,0.3,0.5]:
+        df_miss=missing_at_random(dt=df,rate=i,target=target)
+        df_miss_list[n].append(df_miss)
+est=DecisionTreeClassifier(random_state=0,min_samples_leaf=5,max_depth=20,min_samples_split=18)
+pars=[{'min_samples_leaf':[i for i in range(1,10)]},
+      {'max_depth':[i for i in range(10,100,10)]},
+      {'min_samples_split':[i for i in range(2,20,2)]}
+     ]
+X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+Y_test = df.loc[~df.T.isna().any(),target]
+est=gspa(est,pars,X_test,Y_test)
+est.get_params()
+res=main(df_miss_list,est)
+sumres=pd.DataFrame([np.zeros(11)]*3)
+sumres.columns=res.columns
+for i in range(0,len(res)):
+    sumres.iloc[i%3,:] += res.iloc[i,:]
+sumres*20
+x=sumres.copy(deep=True)
+x/=5
+for i in range(0,len(x)):
+    a=max(x.iloc[i,0],x.iloc[i,4])
+    x.iloc[i,8]=x.iloc[i,8]-a
+    b=max(x.iloc[i,0:9])
+    x.iloc[i,9]=x.iloc[i,9]-b
+for i in range(1,4):
+    x.iloc[:,i]=x.iloc[:,i]-x.iloc[:,0]
+for i in range(5,8):
+    x.iloc[:,i]=x.iloc[:,i]-x.iloc[:,4]
+x
+df = pd.read_csv(balance-scale_path)
+from sklearn.preprocessing import LabelEncoder
+enc = LabelEncoder()
+for each in ['Class']:
+    df[each] = enc.fit_transform(df[each])
+target='Class'
+name='balance-scale'
+df_miss_list=[]
+for n in range(0,5):
+    df_miss_list.append([])
+    for i in [0.1,0.3,0.5]:
+        df_miss=missing_at_random(dt=df,rate=i,target=target)
+        df_miss_list[n].append(df_miss)
+res=main(df_miss_list,est)
+sumres=pd.DataFrame([np.zeros(11)]*3)
+sumres.columns=res.columns
+for i in range(0,len(res)):
+    sumres.iloc[i%3,:] += res.iloc[i,:]
+sumres*20
+df.drop(columns=['Cabin','PassengerId','Name','Ticket'],inplace=True)
+enc = LabelEncoder()
+for each in ['Sex','Embarked']:
+    df[each] = enc.fit_transform(df[each])
+target='Survived'
+name='Titanic'
+###########
+df_miss_list=[]
+for n in range(0,5):
+    df_miss_list.append([])
+    for i in [0.1,0.3,0.5]:
+        df_miss=missing_at_random(dt=df,rate=i,target=target)
+        df_miss_list[n].append(df_miss)
+est=DecisionTreeClassifier(random_state=0,min_samples_leaf=5,max_depth=20,min_samples_split=18)
+pars=[{'min_samples_leaf':[i for i in range(1,10)]},
+      {'max_depth':[i for i in range(10,100,10)]},
+      {'min_samples_split':[i for i in range(2,20,2)]}
+     ]
+X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+Y_test = df.loc[~df.T.isna().any(),target]
+est=gspa(est,pars,X_test,Y_test)
+res=main(df_miss_list,est)
+sumres=pd.DataFrame([np.zeros(11)]*3)
+sumres.columns=res.columns
+for i in range(0,len(res)):
+    sumres.iloc[i%3,:] += res.iloc[i,:]
+sumres*20
+x=res.copy(deep=True)
+x/=5
+for i in range(0,len(x)):
+    a=max(x.iloc[i,0],x.iloc[i,4])
+    x.iloc[i,8]=x.iloc[i,8]-a
+    b=max(x.iloc[i,0:9])
+    x.iloc[i,9]=x.iloc[i,9]-b
+for i in range(1,4):
+    x.iloc[:,i]=x.iloc[:,i]-x.iloc[:,0]
+for i in range(5,8):
+    x.iloc[:,i]=x.iloc[:,i]-x.iloc[:,4]
+from sklearn.preprocessing import LabelEncoder
+enc=LabelEncoder()
+for each in ['0']:
+    df[each] = enc.fit_transform(df[each])
+target='0'
+name='abalone'
+def test1():
+    warnings.simplefilter("ignore")
+    score_summary = pd.DataFrame([np.zeros(6),np.zeros(6),np.zeros(6)],columns=['knn','knn+','bayes','bayes+','rfc','rfc+'])
+    ce_summary = []
+    X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+    Y_test = df.loc[~df.T.isna().any(),target]
+    time_use = []
+    for n in range(0,5):
+        i=0
+        for each_df in df_miss_list[n]:
+            Xt=miss_indicator.fit_transform(each_df)
+            X0 = each_df.copy(deep=True)
+            X0.iloc[0:X0.shape[0],:] = k_imp.fit_transform(X0)
+            clf.fit(X0.loc[:,X0.columns!=target],X0.loc[:,target].astype(int))
+            score_summary.loc[i,'knn'] += clf.score(X_test,Y_test.astype(int))
+            X1 = each_df.copy(deep=True)
+            X1.iloc[0:X1.shape[0],:] = d_imp.fit_transform(X1)
+            clf.fit(X1.loc[:,X1.columns!=target],X1.loc[:,target].astype(int))
+            score_summary.loc[i,'rfc'] += clf.score(X_test,Y_test.astype(int))
+            X2 = each_df.copy(deep=True)
+            X2.iloc[0:X2.shape[0],:] = b_imp.fit_transform(X2)
+            clf.fit(X2.loc[:,X2.columns!=target],X2.loc[:,target].astype(int))
+            score_summary.loc[i,'bayes'] += clf.score(X_test,Y_test.astype(int))
+            
+            
+            X0 = each_df.copy(deep=True)
+            X0.iloc[0:X0.shape[0],:] = iter_by_correction_target(each_df,target,k_imp,clf)
+            clf.fit(X0.loc[:,X0.columns!=target],X0.loc[:,target].astype(int))
+            score_summary.loc[i,'knn+'] += clf.score(X_test,Y_test.astype(int))
+            X1 = each_df.copy(deep=True)
+            X1.iloc[0:X1.shape[0],:] = iter_by_correction_target(each_df,target,d_imp,clf)
+            clf.fit(X1.loc[:,X1.columns!=target],X1.loc[:,target].astype(int))
+            score_summary.loc[i,'rfc+'] += clf.score(X_test,Y_test.astype(int))
+            X2 = each_df.copy(deep=True)
+            X2.iloc[0:X2.shape[0],:] = iter_by_correction_target(each_df,target,b_imp,clf)
+            clf.fit(X2.loc[:,X2.columns!=target],X2.loc[:,target].astype(int))
+            score_summary.loc[i,'bayes+'] += clf.score(X_test,Y_test.astype(int))
+            i+=1
+    print(score_summary)
+    
+ df_miss_list=[]
+for n in range(0,5):
+    df_miss_list.append([])
+    for i in [0.1,0.3,0.5]:
+        df_miss=missing_at_random(dt=df,rate=i,target=target)
+        df_miss_list[n].append(df_miss)
+est=DecisionTreeClassifier(random_state=0,min_samples_leaf=5,max_depth=20,min_samples_split=18)
+pars=[{'min_samples_leaf':[i for i in range(1,10)]},
+      {'max_depth':[i for i in range(10,100,10)]},
+      {'min_samples_split':[i for i in range(2,20,2)]}
+     ]
+X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+Y_test = df.loc[~df.T.isna().any(),target]
+est=gspa(est,pars,X_test,Y_test)
+res=main(df_miss_list,est)
+sumres=pd.DataFrame([np.zeros(11)]*3)
+sumres.columns=res.columns
+for i in range(0,len(res)):
+    sumres.iloc[i%3,:] += res.iloc[i,:]
+sumres*20
+for each in df.columns:
+    df[each] = enc.fit_transform(df[each])
+target='9'
+name='glass'
+def test3(df_miss_list,est):
+    score_summary = pd.DataFrame([np.zeros(6),np.zeros(6),np.zeros(6)]*5,columns=['knn','knn+','rfc','rfc+','concat','fig'])
+    X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+    Y_test = df.loc[~df.T.isna().any(),target]
+    imputer=[k_imp,d_imp]
+    clf=[clf_k,est]
+    
+    pars = [{'n_neighbors':[i for i in range(2,10)]},{'random_state':[0]}] 
+     
+    
+    for i in range(0,5):#i取值0-5，代表组数len(df_miss_list)
+        for j in range(0,len(df_miss_list[i])): #j取值0-3，代表缺失率
+            each_data=df_miss_list[i][j]
+            miss_indicator = MissingIndicator()
+            Xt=miss_indicator.fit_transform(each_data)
+            
+            #knn填补
+            X0 = each_data.copy(deep=True)
+            X0.iloc[0:X0.shape[0],:] = imputer[0].fit_transform(each_data) #填补
+            X0=reduction_data_type(each_data,X0) #还原数据类型
+            X=X0.loc[:,X0.columns!=target] 
+            y=X0.loc[:,X0.columns==target]
+             #获取评分,用填补数据建模，反推原始数据的正确性
+            est .fit(X,y)
+            score_summary.iloc[i*3+j,0] += est.score(X_test,Y_test)
+             #获取特征重要度feature_importance
+            clf[0]= gspa(clf[0],pars[0],X,y,)
+            Fi = permutation_importance(clf[0], X, y, n_repeats=10,random_state=0).importances_mean
+            w0=rbf(X0,target,Fi,Xt)
+            est .fit(X,y,sample_weight=w0)
+            score_summary.iloc[i*3+j,1] += est.score(X_test,Y_test )
+            
+            X0g,w0g=select(X0,w0)
+            
+            #rfc填补
+            X1 = each_data.copy(deep=True)
+            X1.iloc[0:X1.shape[0],:] = imputer[1].fit_transform(each_data) #填补
+            X1=reduction_data_type(each_data,X1) #还原数据类型
+            X=X1.loc[:,X1.columns!=target] 
+            y=X1.loc[:,X1.columns==target]
+             #获取评分,用填补数据建模，反推原始数据的正确性
+            est .fit(X,y)
+            score_summary.iloc[i*3+j,2] += est.score(X_test,Y_test)
+             #获取特征重要度feature_importance
+            clf[1]= gspa(clf[1],pars[1],X,y,)
+            Fi = permutation_importance(clf[1], X, y, n_repeats=10,random_state=0).importances_mean
+            w1=rbf(X0,target,Fi,Xt)
+            est .fit(X,y,sample_weight=w1)
+            score_summary.iloc[i*3+j,3] += est.score(X_test,Y_test )
+             
+             
+                
+            X3=pd.concat([X0,X1],axis=0)
+            X=X3.loc[:,X3.columns!=target] 
+            y=X3.loc[:,X3.columns==target]
+            est  .fit(X,y)
+            score_summary.iloc[i*3+j,4] += est.score(X_test,Y_test)
+            
+            X3=pd.concat([X1,X0g],axis=0)
+            w4=[]
+            w4.extend(w1)
+            w4.extend(w0g)
+            X=X3.loc[:,X3.columns!=target] 
+            y=X3.loc[:,X3.columns==target]
+            est  .fit(X,y,sample_weight=w4)
+            score_summary.iloc[i*3+j,5] += est.score(X_test,Y_test)
+    return score_summarydf_miss_list=[]
+for n in range(0,5):
+    df_miss_list.append([])
+    for i in [0.1,0.3,0.5]:
+        df_miss=missing_at_random(dt=df,rate=i,target=target)
+        df_miss_list[n].append(df_miss)
+est=DecisionTreeClassifier(random_state=0,min_samples_leaf=5,max_depth=20,min_samples_split=18)
+pars=[{'min_samples_leaf':[i for i in range(1,10)]},
+      {'max_depth':[i for i in range(10,100,10)]},
+      {'min_samples_split':[i for i in range(2,20,2)]}
+     ]
+X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+Y_test = df.loc[~df.T.isna().any(),target]
+est=gspa(est,pars,X_test,Y_test)
+res=main(df_miss_list,est)
+sumres=pd.DataFrame([np.zeros(11)]*3)
+sumres.columns=res.columns
+for i in range(0,len(res)):
+    sumres.iloc[i%3,:] += res.iloc[i,:]
+sumres*20
+import warnings
+warnings.filterwarnings("ignore")
+df=df.iloc[:,0:7]
+df['horsepower'].loc[df['horsepower']=='?']= None
+df['horsepower'] =pd.to_numeric(df['horsepower'],errors='coerce')  
+df.reset_index(drop=True,inplace=True)
+target='mpg'
+name='auto-mpg'
+df_miss_list =[]
+for n in range(0,5):
+    df_miss_list.append([])
+    for i in [0.1,0.3,0.5]:
+        df_miss=missing_at_random(dt=df,rate=i,target=target)
+        df_miss_list[n].append(df_miss)
+est=DecisionTreeRegressor(random_state=0,min_samples_leaf=5,max_depth=20,min_samples_split=18)
+pars=[{'min_samples_leaf':[i for i in range(1,10)]},
+      {'max_depth':[i for i in range(10,100,10)]},
+      {'min_samples_split':[i for i in range(2,20,2)]}
+     ]
+X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+Y_test = df.loc[~df.T.isna().any(),target]
+est=gspa(est,pars,X_test,Y_test)
+res=main(df_miss_list,est)
+sumres=pd.DataFrame([np.zeros(11)]*3)
+sumres.columns=res.columns
+for i in range(0,len(res)):
+    sumres.iloc[i%3,:] += res.iloc[i,:]
+sumres/5
+from sklearn.preprocessing import LabelEncoder
+enc = LabelEncoder()
+for each in ['0','1']:
+    df[each] = enc.fit_transform(df[each])
+target='9'
+name='cpu'
+###############
+df_miss_list =[]
+for n in range(0,5):
+    df_miss_list.append([])
+    for i in [0.1,0.2,0.4]:
+        df_miss=missing_at_random(dt=df,rate=i,target=target)
+        df_miss_list[n].append(df_miss)
+est=DecisionTreeRegressor(random_state=0,min_samples_leaf=5,max_depth=20,min_samples_split=18)
+pars=[{'min_samples_leaf':[i for i in range(1,10)]},
+      {'max_depth':[i for i in range(10,100,10)]},
+      {'min_samples_split':[i for i in range(2,20,2)]}
+     ]
+X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+Y_test = df.loc[~df.T.isna().any(),target]
+est=gspa(est,pars,X_test,Y_test)
+res=main(df_miss_list,est)
+sumres=pd.DataFrame([np.zeros(11)]*3)
+sumres.columns=res.columns
+for i in range(0,len(res)):
+    sumres.iloc[i%3,:] += res.iloc[i,:]
+sumres/5
+from sklearn.preprocessing import LabelEncoder
+enc = LabelEncoder()
+for each in ['month','day']:
+    df[each] = enc.fit_transform(df[each])
+df['area']=np.log(1+np.array(df['area']))#数据集使用建议，原本的target大部分过于趋近于0，用Log分散
+target='area'
+name='forest'
+###############
+df_miss_list =[]
+for n in range(0,5):
+    df_miss_list.append([])
+    for i in [0.1,0.2,0.4]:
+        df_miss=missing_at_random(dt=df,rate=i,target=target)
+        df_miss_list[n].append(df_miss)
+est=DecisionTreeRegressor(random_state=0,min_samples_leaf=5,max_depth=20,min_samples_split=18)
+pars=[{'min_samples_leaf':[i for i in range(1,10)]},
+      {'max_depth':[i for i in range(10,100,10)]},
+      {'min_samples_split':[i for i in range(2,20,2)]}
+     ]
+X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+Y_test = df.loc[~df.T.isna().any(),target]
+est=gspa(est,pars,X_test,Y_test)
+res=main(df_miss_list,est)
+sumres=pd.DataFrame([np.zeros(11)]*3)
+        knn_imp = KNNImputer()
+        X= each_df.copy(deep=True)
+        X = pd.DataFrame(knn_imp.fit_transform(X))
+        X.columns = df.columns
+        X.index = df.index
+        
+        dt = DecisionTreeClassifier(random_state=20220335)
+        dt.fit(X.loc[:,X.columns!=target],X.loc[:,target].astype(int))
+        X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+        Y_test = df.loc[~df.T.isna().any(),target]
+        score_res[i] += dt.score(X_test,Y_test.astype(int))
+        i+=1
+for i in range(0,5):
+    score_res[i] /= 10
+print(score_res)
+def main():
+    warnings.simplefilter("ignore")
+    score_summary = pd.DataFrame([np.zeros(5),np.zeros(5),np.zeros(5)],columns=['knn','rfc','bayes','NCA','iter'])
+    ce_summary = []
+    X_test = df.loc[~df.T.isna().any(),df.columns!=target]
+    Y_test = df.loc[~df.T.isna().any(),target]
+    time_use = []
+    for n in range(0,1):
+        i=0
+        for each_df in df_miss_list[n]:
+            Xt=miss_indicator.fit_transform(each_df)
+            X0 = each_df.copy(deep=True)
+            X0.iloc[0:X0.shape[0],:] = k_imp.fit_transform(X0)
+            dt.fit(X0.loc[:,X0.columns!=target],X0.loc[:,target].astype(int))
+            score_summary.loc[i,'knn'] += dt.score(X_test,Y_test.astype(int))
+            X1 = each_df.copy(deep=True)
+            X1.iloc[0:X1.shape[0],:] = d_imp.fit_transform(X1)
+            dt.fit(X1.loc[:,X1.columns!=target],X1.loc[:,target].astype(int))
+            score_summary.loc[i,'rfc'] += dt.score(X_test,Y_test.astype(int))
+            X2 = each_df.copy(deep=True)
+            X2.iloc[0:X2.shape[0],:] = b_imp.fit_transform(X2)
+            dt.fit(X2.loc[:,X2.columns!=target],X2.loc[:,target].astype(int))
+            score_summary.loc[i,'bayes'] += dt.score(X_test,Y_test.astype(int))
+            #修改区
+            X0 =reduction_data_type(df,X0)
+            X1 =reduction_data_type(df,X1)
+            X2 =reduction_data_type(df,X2)
+            #NCA均值\众数融合
+            res_nca = NCA([X0,X1,X2],Xt)
+            dt.fit(res_nca.loc[:,res_nca.columns!=target],res_nca.loc[:,target].astype(int))
+            score_summary.loc[i,'NCA'] += dt.score(X_test,Y_test.astype(int))
+            #iter
+            res=merge_by_model(each_df,[k_imp,d_imp,b_imp])
+            dt.fit(res.loc[:,res.columns!=target],res.loc[:,target].astype(int))
+            score = dt.score(X_test,Y_test.astype(int))
+            score_summary.loc[i,'iter'] += score
+            i+=1
+    return score_summary
+from time import time
+from collections import namedtuple
+import warnings
+from scipy import stats
+import numpy as np
+
+from sklearn.base import clone
+from sklearn.exceptions import ConvergenceWarning
+from sklearn.preprocessing import normalize
+from sklearn.utils import check_array, check_random_state, _safe_indexing, is_scalar_nan
+from sklearn.utils.validation import FLOAT_DTYPES, check_is_fitted
+from sklearn.utils._mask import _get_mask
+from sklearn.impute._base import _BaseImputer
+from sklearn.impute._base import SimpleImputer
+from sklearn.impute._base import _check_inputs_dtype
+
+_ImputerTriplet = namedtuple(
+    "_ImputerTriplet", ["feat_idx", "neighbor_feat_idx", "estimator"]
+)
+
+class FIB(_BaseImputer):
+    """Multivariate imputer that estimates each feature from all the others.
+    A strategy for imputing missing values by modeling each feature with
+    missing values as a function of other features in a round-robin fashion.
+    Read more in the :ref:`User Guide <iterative_imputer>`.
+    .. versionadded:: 0.21
+    .. note::
+      This estimator is still **experimental** for now: the predictions
+      and the API might change without any deprecation cycle. To use it,
+      you need to explicitly import `enable_iterative_imputer`::
+        >>> # explicitly require this experimental feature
+        >>> from sklearn.experimental import enable_iterative_imputer  # noqa
+        >>> # now you can import normally from sklearn.impute
+        >>> from sklearn.impute import IterativeImputer
+    Parameters
+    ----------
+    estimator : estimator object, default=BayesianRidge()
+        The estimator to use at each step of the round-robin imputation.
+        If `sample_posterior=True`, the estimator must support
+        `return_std` in its `predict` method.
+    missing_values : int or np.nan, default=np.nan
+        The placeholder for the missing values. All occurrences of
+        `missing_values` will be imputed. For pandas' dataframes with
+        nullable integer dtypes with missing values, `missing_values`
+        should be set to `np.nan`, since `pd.NA` will be converted to `np.nan`.
+    sample_posterior : bool, default=False
+        Whether to sample from the (Gaussian) predictive posterior of the
+        fitted estimator for each imputation. Estimator must support
+        `return_std` in its `predict` method if set to `True`. Set to
+        `True` if using `IterativeImputer` for multiple imputations.
+    max_iter : int, default=10
+        Maximum number of imputation rounds to perform before returning the
+        imputations computed during the final round. A round is a single
+        imputation of each feature with missing values. The stopping criterion
+        is met once `max(abs(X_t - X_{t-1}))/max(abs(X[known_vals])) < tol`,
+        where `X_t` is `X` at iteration `t`. Note that early stopping is only
+        applied if `sample_posterior=False`.
+    tol : float, default=1e-3
+        Tolerance of the stopping condition.
+    n_nearest_features : int, default=None
+        Number of other features to use to estimate the missing values of
+        each feature column. Nearness between features is measured using
+        the absolute correlation coefficient between each feature pair (after
+        initial imputation). To ensure coverage of features throughout the
+        imputation process, the neighbor features are not necessarily nearest,
+        but are drawn with probability proportional to correlation for each
+        imputed target feature. Can provide significant speed-up when the
+        number of features is huge. If `None`, all features will be used.
+    initial_strategy : {'mean', 'median', 'most_frequent', 'constant'}, \
+            default='mean'
+        Which strategy to use to initialize the missing values. Same as the
+        `strategy` parameter in :class:`~sklearn.impute.SimpleImputer`.
+    imputation_order : {'ascending', 'descending', 'roman', 'arabic', \
+            'random'}, default='ascending'
+        The order in which the features will be imputed. Possible values:
+        - `'ascending'`: From features with fewest missing values to most.
+        - `'descending'`: From features with most missing values to fewest.
+        - `'roman'`: Left to right.
+        - `'arabic'`: Right to left.
+        - `'random'`: A random order for each round.
+    skip_complete : bool, default=False
+        If `True` then features with missing values during :meth:`transform`
+        which did not have any missing values during :meth:`fit` will be
+        imputed with the initial imputation method only. Set to `True` if you
+        have many features with no missing values at both :meth:`fit` and
+        :meth:`transform` time to save compute.
+    min_value : float or array-like of shape (n_features,), default=-np.inf
+        Minimum possible imputed value. Broadcast to shape `(n_features,)` if
+        scalar. If array-like, expects shape `(n_features,)`, one min value for
+        each feature. The default is `-np.inf`.
+        .. versionchanged:: 0.23
+           Added support for array-like.
+    max_value : float or array-like of shape (n_features,), default=np.inf
+        Maximum possible imputed value. Broadcast to shape `(n_features,)` if
+        scalar. If array-like, expects shape `(n_features,)`, one max value for
+        each feature. The default is `np.inf`.
+        .. versionchanged:: 0.23
+           Added support for array-like.
+    verbose : int, default=0
+        Verbosity flag, controls the debug messages that are issued
+        as functions are evaluated. The higher, the more verbose. Can be 0, 1,
+        or 2.
+    random_state : int, RandomState instance or None, default=None
+        The seed of the pseudo random number generator to use. Randomizes
+        selection of estimator features if `n_nearest_features` is not `None`,
+        the `imputation_order` if `random`, and the sampling from posterior if
+        `sample_posterior=True`. Use an integer for determinism.
+        See :term:`the Glossary <random_state>`.
+    add_indicator : bool, default=False
+        If `True`, a :class:`MissingIndicator` transform will stack onto output
+        of the imputer's transform. This allows a predictive estimator
+        to account for missingness despite imputation. If a feature has no
+        missing values at fit/train time, the feature won't appear on
+        the missing indicator even if there are missing values at
+        transform/test time.
+    Attributes
+    ----------
+    initial_imputer_ : object of type :class:`~sklearn.impute.SimpleImputer`
+        Imputer used to initialize the missing values.
+    imputation_sequence_ : list of tuples
+        Each tuple has `(feat_idx, neighbor_feat_idx, estimator)`, where
+        `feat_idx` is the current feature to be imputed,
+        `neighbor_feat_idx` is the array of other features used to impute the
+        current feature, and `estimator` is the trained estimator used for
+        the imputation. Length is `self.n_features_with_missing_ *
+        self.n_iter_`.
+    n_iter_ : int
+        Number of iteration rounds that occurred. Will be less than
+        `self.max_iter` if early stopping criterion was reached.
+    n_features_in_ : int
+        Number of features seen during :term:`fit`.
+        .. versionadded:: 0.24
+    feature_names_in_ : ndarray of shape (`n_features_in_`,)
+        Names of features seen during :term:`fit`. Defined only when `X`
+        has feature names that are all strings.
+        .. versionadded:: 1.0
+    n_features_with_missing_ : int
+        Number of features with missing values.
+    indicator_ : :class:`~sklearn.impute.MissingIndicator`
+        Indicator used to add binary indicators for missing values.
+        `None` if `add_indicator=False`.
+    random_state_ : RandomState instance
+        RandomState instance that is generated either from a seed, the random
+        number generator or by `np.random`.
+    See Also
+    --------
+    SimpleImputer : Univariate imputation of missing values.
+    Notes
+    -----
+    To support imputation in inductive mode we store each feature's estimator
+    during the :meth:`fit` phase, and predict without refitting (in order)
+    during the :meth:`transform` phase.
+    Features which contain all missing values at :meth:`fit` are discarded upon
+    :meth:`transform`.
+    References
+    ----------
+    .. [1] `Stef van Buuren, Karin Groothuis-Oudshoorn (2011). "mice:
+        Multivariate Imputation by Chained Equations in R". Journal of
+        Statistical Software 45: 1-67.
+        <https://www.jstatsoft.org/article/view/v045i03>`_
+    .. [2] `S. F. Buck, (1960). "A Method of Estimation of Missing Values in
+        Multivariate Data Suitable for use with an Electronic Computer".
+        Journal of the Royal Statistical Society 22(2): 302-306.
+        <https://www.jstor.org/stable/2984099>`_
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from sklearn.experimental import enable_iterative_imputer
+    >>> from sklearn.impute import IterativeImputer
+    >>> imp_mean = IterativeImputer(random_state=0)
+    >>> imp_mean.fit([[7, 2, 3], [4, np.nan, 6], [10, 5, 9]])
+    IterativeImputer(random_state=0)
+    >>> X = [[np.nan, 2, 3], [4, np.nan, 6], [10, np.nan, 9]]
+    >>> imp_mean.transform(X)
+    array([[ 6.9584...,  2.       ,  3.        ],
+           [ 4.       ,  2.6000...,  6.        ],
+           [10.       ,  4.9999...,  9.        ]])
+    """
+    def __init__(
+        self,
+        estimator=None,
+        *,
+        missing_values=np.nan,
+        sample_posterior=False,
+        max_iter=10,
+        tol=1e-3,
+        n_nearest_features=None,
+        initial_strategy="mean",
+        imputation_order="ascending",
+        skip_complete=False,
+        min_value=-np.inf,
+        max_value=np.inf,
+        verbose=0,
+        random_state=None,
+        add_indicator=False,
+    ):
+        super().__init__(missing_values=missing_values, add_indicator=add_indicator)
+        self.estimator = estimator
+        self.sample_posterior = sample_posterior
+        self.max_iter = max_iter
+        self.tol = tol
+        self.n_nearest_features = n_nearest_features
+        self.initial_strategy = initial_strategy
+        self.imputation_order = imputation_order
+        self.skip_complete = skip_complete
+        self.min_value = min_value
+        self.max_value = max_value
+        self.verbose = verbose
+        self.random_state = random_state
+    def _impute_one_feature(
+        self,
+        X_filled,
+        mask_missing_values,
+        feat_idx,
+        neighbor_feat_idx,
+        estimator=None,
+        fit_mode=True,
+    ):
+        """Impute a single feature from the others provided.
+        This function predicts the missing values of one of the features using
+        the current estimates of all the other features. The `estimator` must
+        support `return_std=True` in its `predict` method for this function
+        to work.
+        Parameters
+        ----------
+        X_filled : ndarray
+            Input data with the most recent imputations.
+        mask_missing_values : ndarray
+            Input data's missing indicator matrix.
+        feat_idx : int
+            Index of the feature currently being imputed.
+        neighbor_feat_idx : ndarray
+            Indices of the features to be used in imputing `feat_idx`.
+        estimator : object
+            The estimator to use at this step of the round-robin imputation.
+            If `sample_posterior=True`, the estimator must support
+            `return_std` in its `predict` method.
+            If None, it will be cloned from self._estimator.
+        fit_mode : boolean, default=True
+            Whether to fit and predict with the estimator or just predict.
+        Returns
+        -------
+        X_filled : ndarray
+            Input data with `X_filled[missing_row_mask, feat_idx]` updated.
+        estimator : estimator with sklearn API
+            The fitted estimator used to impute
+            `X_filled[missing_row_mask, feat_idx]`.
+        """
+        if estimator is None and fit_mode is False:
+            raise ValueError(
+                "If fit_mode is False, then an already-fitted "
+                "estimator should be passed in."
+            )
+        if estimator is None:
+            estimator = clone(self._estimator)
+        missing_row_mask = mask_missing_values[:, feat_idx]
+        if fit_mode:
+            X_train = _safe_indexing(X_filled[:, neighbor_feat_idx], ~missing_row_mask)
+            y_train = _safe_indexing(X_filled[:, feat_idx], ~missing_row_mask)
+            estimator.fit(X_train, y_train)
+        # if no missing values, don't predict
+        if np.sum(missing_row_mask) == 0:
+            return X_filled, estimator
+        # get posterior samples if there is at least one missing value
+        X_test = _safe_indexing(X_filled[:, neighbor_feat_idx], missing_row_mask)
+        if self.sample_posterior:
+            mus, sigmas = estimator.predict(X_test, return_std=True)
+            imputed_values = np.zeros(mus.shape, dtype=X_filled.dtype)
+            # two types of problems: (1) non-positive sigmas
+            # (2) mus outside legal range of min_value and max_value
+            # (results in inf sample)
+            positive_sigmas = sigmas > 0
+            imputed_values[~positive_sigmas] = mus[~positive_sigmas]
+            mus_too_low = mus < self._min_value[feat_idx]
+            imputed_values[mus_too_low] = self._min_value[feat_idx]
+            mus_too_high = mus > self._max_value[feat_idx]
+            imputed_values[mus_too_high] = self._max_value[feat_idx]
+            # the rest can be sampled without statistical issues
+            inrange_mask = positive_sigmas & ~mus_too_low & ~mus_too_high
+            mus = mus[inrange_mask]
+            sigmas = sigmas[inrange_mask]
+            a = (self._min_value[feat_idx] - mus) / sigmas
+            b = (self._max_value[feat_idx] - mus) / sigmas
+            truncated_normal = stats.truncnorm(a=a, b=b, loc=mus, scale=sigmas)
+            imputed_values[inrange_mask] = truncated_normal.rvs(
+                random_state=self.random_state_
+            )
+        else:
+            imputed_values = estimator.predict(X_test)
+            imputed_values = np.clip(
+                imputed_values, self._min_value[feat_idx], self._max_value[feat_idx]
+            )
+        # update the feature
+        X_filled[missing_row_mask, feat_idx] = imputed_values
+        return X_filled, estimator
+    def _get_neighbor_feat_idx(self, n_features, feat_idx, abs_corr_mat):
+        """Get a list of other features to predict `feat_idx`.
+        If `self.n_nearest_features` is less than or equal to the total
+        number of features, then use a probability proportional to the absolute
+        correlation between `feat_idx` and each other feature to randomly
+        choose a subsample of the other features (without replacement).
+        Parameters
+        ----------
+        n_features : int
+            Number of features in `X`.
+        feat_idx : int
+            Index of the feature currently being imputed.
+        abs_corr_mat : ndarray, shape (n_features, n_features)
+            Absolute correlation matrix of `X`. The diagonal has been zeroed
+            out and each feature has been normalized to sum to 1. Can be None.
+        Returns
+        -------
+        neighbor_feat_idx : array-like
+            The features to use to impute `feat_idx`.
+        """
+        if self.n_nearest_features is not None and self.n_nearest_features < n_features:
+            p = abs_corr_mat[:, feat_idx]
+            neighbor_feat_idx = self.random_state_.choice(
+                np.arange(n_features), self.n_nearest_features, replace=False, p=p
+            )
+        else:
+            inds_left = np.arange(feat_idx)
+            inds_right = np.arange(feat_idx + 1, n_features)
+            neighbor_feat_idx = np.concatenate((inds_left, inds_right))
+        return neighbor_feat_idx
+    def _get_ordered_idx(self, mask_missing_values,X_filled):
+        """Decide in what order we will update the features.
+        As a homage to the MICE R package, we will have 4 main options of
+        how to order the updates, and use a random order if anything else
+        is specified.
+        Also, this function skips features which have no missing values.
+        Parameters
+        ----------
+        mask_missing_values : array-like, shape (n_samples, n_features)
+            Input data's missing indicator matrix, where `n_samples` is the
+            number of samples and `n_features` is the number of features.
+        Returns
+        -------
+        ordered_idx : ndarray, shape (n_features,)
+            The order in which to impute the features.
+        """
+        frac_of_missing_values = mask_missing_values.mean(axis=0)
+        if self.skip_complete:
+            missing_values_idx = np.flatnonzero(frac_of_missing_values)
+        else:
+            missing_values_idx = np.arange(np.shape(frac_of_missing_values)[0])
+        if self.imputation_order == "roman":
+            ordered_idx = missing_values_idx
+        elif self.imputation_order == "arabic":
+            ordered_idx = missing_values_idx[::-1]
+        elif self.imputation_order == "ascending":
+            n = len(frac_of_missing_values) - len(missing_values_idx)
+            ordered_idx = np.argsort(frac_of_missing_values, kind="mergesort")[n:]
+        elif self.imputation_order == "descending":
+            n = len(frac_of_missing_values) - len(missing_values_idx)
+            ordered_idx = np.argsort(frac_of_missing_values, kind="mergesort")[n:][::-1]
+        elif self.imputation_order == "random":
+            ordered_idx = missing_values_idx
+            self.random_state_.shuffle(ordered_idx)
+        elif self.imputation_order == "weighted":
+            ori_n_nearest_features = self.n_nearest_features
+            self.n_nearest_features = 1
+            abs_corr_mat = self._get_abs_corr_mat(X_filled)
+            self.n_nearest_features = ori_n_nearest_features
+            weighted_miss_value = np.ndarray(len(frac_of_missing_values))
+            for i in range(0,len(frac_of_missing_values)):
+                value = 0
+                for j in range(0,len(abs_corr_mat)):
+                    if(i!=j):
+                        value += frac_of_missing_values[i] * abs_corr_mat[i,j]
+                weighted_miss_value[i]=value
+            n = len(frac_of_missing_values) - len(missing_values_idx)
+            ordered_idx = np.argsort(weighted_miss_value, kind="mergesort")[n:]
+                    
+        else:
+            raise ValueError(
+                "Got an invalid imputation order: '{0}'. It must "
+                "be one of the following: 'roman', 'arabic', "
+                "'ascending', 'descending', or "
+                "'random'.".format(self.imputation_order)
+            )
+        
+        return ordered_idx
+    def _get_abs_corr_mat(self, X_filled, tolerance=1e-6):
+        """Get absolute correlation matrix between features.
+        Parameters
+        ----------
+        X_filled : ndarray, shape (n_samples, n_features)
+            Input data with the most recent imputations.
+        tolerance : float, default=1e-6
+            `abs_corr_mat` can have nans, which will be replaced
+            with `tolerance`.
+        Returns
+        -------
+        abs_corr_mat : ndarray, shape (n_features, n_features)
+            Absolute correlation matrix of `X` at the beginning of the
+            current round. The diagonal has been zeroed out and each feature's
+            absolute correlations with all others have been normalized to sum
+            to 1.
+        """
+        n_features = X_filled.shape[1]
+        if self.n_nearest_features is None or self.n_nearest_features >= n_features:
+            return None
+        with np.errstate(invalid="ignore"):
+            # if a feature in the neighborhood has only a single value
+            # (e.g., categorical feature), the std. dev. will be null and
+            # np.corrcoef will raise a warning due to a division by zero
+            abs_corr_mat = np.abs(np.corrcoef(X_filled.T))
+        # np.corrcoef is not defined for features with zero std
+        abs_corr_mat[np.isnan(abs_corr_mat)] = tolerance
+        # ensures exploration, i.e. at least some probability of sampling
+        np.clip(abs_corr_mat, tolerance, None, out=abs_corr_mat)
+        # features are not their own neighbors
+        np.fill_diagonal(abs_corr_mat, 0)
+        # needs to sum to 1 for np.random.choice sampling
+        abs_corr_mat = normalize(abs_corr_mat, norm="l1", axis=0, copy=False)
+        return abs_corr_mat
+    def _initial_imputation(self, X, in_fit=False):
+        """Perform initial imputation for input `X`.
+        Parameters
+        ----------
+        X : ndarray, shape (n_samples, n_features)
+            Input data, where `n_samples` is the number of samples and
+            `n_features` is the number of features.
+        in_fit : bool, default=False
+            Whether function is called in :meth:`fit`.
+        Returns
+        -------
+        Xt : ndarray, shape (n_samples, n_features)
+            Input data, where `n_samples` is the number of samples and
+            `n_features` is the number of features.
+        X_filled : ndarray, shape (n_samples, n_features)
+            Input data with the most recent imputations.
+        mask_missing_values : ndarray, shape (n_samples, n_features)
+            Input data's missing indicator matrix, where `n_samples` is the
+            number of samples and `n_features` is the number of features.
+        X_missing_mask : ndarray, shape (n_samples, n_features)
+            Input data's mask matrix indicating missing datapoints, where
+            `n_samples` is the number of samples and `n_features` is the
+            number of features.
+        """
+        if is_scalar_nan(self.missing_values):
+            force_all_finite = "allow-nan"
+        else:
+            force_all_finite = True
+        X = self._validate_data(
+            X,
+            dtype=FLOAT_DTYPES,
+            order="F",
+            reset=in_fit,
+            force_all_finite=force_all_finite,
+        )
+        _check_inputs_dtype(X, self.missing_values)
+        X_missing_mask = _get_mask(X, self.missing_values)
+        mask_missing_values = X_missing_mask.copy()
+        if self.initial_imputer_ is None:
+            self.initial_imputer_ = SimpleImputer(
+                missing_values=self.missing_values, strategy=self.initial_strategy
+            )
+            X_filled = self.initial_imputer_.fit_transform(X)
+        else:
+            X_filled = self.initial_imputer_.transform(X)
+        valid_mask = np.flatnonzero(
+            np.logical_not(np.isnan(self.initial_imputer_.statistics_))
+        )
+        Xt = X[:, valid_mask]
+        mask_missing_values = mask_missing_values[:, valid_mask]
+        
+        return Xt, X_filled, mask_missing_values, X_missing_mask
+    @staticmethod
+    def _validate_limit(limit, limit_type, n_features):
+        """Validate the limits (min/max) of the feature values.
+        Converts scalar min/max limits to vectors of shape `(n_features,)`.
+        Parameters
+        ----------
+        limit: scalar or array-like
+            The user-specified limit (i.e, min_value or max_value).
+        limit_type: {'max', 'min'}
+            Type of limit to validate.
+        n_features: int
+            Number of features in the dataset.
+        Returns
+        -------
+        limit: ndarray, shape(n_features,)
+            Array of limits, one for each feature.
+        """
+        limit_bound = np.inf if limit_type == "max" else -np.inf
+        limit = limit_bound if limit is None else limit
+        if np.isscalar(limit):
+            limit = np.full(n_features, limit)
+        limit = check_array(limit, force_all_finite=False, copy=False, ensure_2d=False)
+        if not limit.shape[0] == n_features:
+            raise ValueError(
+                f"'{limit_type}_value' should be of "
+                f"shape ({n_features},) when an array-like "
+                f"is provided. Got {limit.shape}, instead."
+            )
+        return limit
+    def fit_transform(self, X, y=None):
+        """Fit the imputer on `X` and return the transformed `X`.
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features)
+            Input data, where `n_samples` is the number of samples and
+            `n_features` is the number of features.
+        y : Ignored
+            Not used, present for API consistency by convention.
+        Returns
+        -------
+        Xt : array-like, shape (n_samples, n_features)
+            The imputed input data.
+        """
+        #生成对应的random_state
+        self.random_state_ = getattr(
+            self, "random_state_", check_random_state(self.random_state)
+        )
+        #检测错误的函数输入
+        if self.max_iter < 0:
+            raise ValueError(
+                "'max_iter' should be a positive integer. Got {} instead.".format(
+                    self.max_iter
+                )
+            )
+        if self.tol < 0:
+            raise ValueError(
+                "'tol' should be a non-negative float. Got {} instead.".format(self.tol)
+            )
+        if self.estimator is None:
+            from sklearn.linear_model import BayesianRidge
+            self._estimator = BayesianRidge()
+        else:
+            self._estimator = clone(self.estimator)  #为了防止fit改变estimator
+        self.imputation_sequence_ = []
+        self.initial_imputer_ = None
+        #######################################################异常输入判断，初始化数据完成
+        
+        X, Xt, mask_missing_values, complete_mask = self._initial_imputation(
+            X, in_fit=True
+        )
+        #######################################################初始填补完成
+        super()._fit_indicator(complete_mask)
+        X_indicator = super()._transform_indicator(complete_mask)
+        if self.max_iter == 0 or np.all(mask_missing_values):
+            self.n_iter_ = 0
+            return super()._concatenate_indicator(Xt, X_indicator)
+        
+        # Edge case: a single feature. We return the initial ...
+        if Xt.shape[1] == 1:
+            self.n_iter_ = 0
+            return super()._concatenate_indicator(Xt, X_indicator)
+        
+        #######################################################异常情况处理完成
+        
+        self._min_value = self._validate_limit(self.min_value, "min", X.shape[1])
+        self._max_value = self._validate_limit(self.max_value, "max", X.shape[1])       
+                 
+        if not np.all(np.greater(self._max_value, self._min_value)):
+            raise ValueError("One (or more) features have min_value >= max_value.")
+            
+        #######################################################转换最大最小值
+        # order in which to impute
+        # note this is probably too slow for large feature data (d > 100000)
+        # and a better way would be good.
+        # see: https://goo.gl/KyCNwj and subsequent comments
+        
+        ordered_idx = self._get_ordered_idx(mask_missing_values,Xt)
+        self.n_features_with_missing_ = len(ordered_idx)
+        
+        #######################################################确定完成填补顺序
+        abs_corr_mat = self._get_abs_corr_mat(Xt)
+        n_samples, n_features = Xt.shape
+        
+        if self.verbose > 0:
+            print("[IterativeImputer] Completing matrix with shape %s" % (X.shape,))
+        start_t = time()
+        
+        if not self.sample_posterior:
+            Xt_previous = Xt.copy()
+            normalized_tol = self.tol * np.max(np.abs(X[~mask_missing_values]))
+        #######################################################填补前的准备工作
+        for self.n_iter_ in range(1, self.max_iter + 1):
+            if self.imputation_order == "random":
+                ordered_idx = self._get_ordered_idx(mask_missing_values)
+            for feat_idx in ordered_idx:
+                neighbor_feat_idx = self._get_neighbor_feat_idx(
+                    n_features, feat_idx, abs_corr_mat
+                )
+        imputations_per_round = len(self.imputation_sequence_) // self.n_iter_
+        i_rnd = 0
+        if self.verbose > 0:
+            print("[IterativeImputer] Completing matrix with shape %s" % (X.shape,))
+        start_t = time()
+        for it, estimator_triplet in enumerate(self.imputation_sequence_):
+            Xt, _ = self._impute_one_feature(
+                Xt,
+                mask_missing_values,
+                estimator_triplet.feat_idx,
+                estimator_triplet.neighbor_feat_idx,
+                estimator=estimator_triplet.estimator,
+                fit_mode=False,
+            )
+            if not (it + 1) % imputations_per_round:
+                if self.verbose > 1:
+                    print(
+                        "[IterativeImputer] Ending imputation round "
+                        "%d/%d, elapsed time %0.2f"
+                        % (i_rnd + 1, self.n_iter_, time() - start_t)
+                    )
+                i_rnd += 1
+        Xt[~mask_missing_values] = X[~mask_missing_values]
+        return super()._concatenate_indicator(Xt, X_indicator)
+    def fit(self, X, y=None):
+        """Fit the imputer on `X` and return self.
+        Parameters
+        ----------
+        X : array-like, shape (n_samples, n_features)
+            Input data, where `n_samples` is the number of samples and
+            `n_features` is the number of features.
+        y : Ignored
+            Not used, present for API consistency by convention.
+        Returns
+        -------
+        self : object
+            Fitted estimator.
+        """
+        self.fit_transform(X)
+        return self
